@@ -59,6 +59,18 @@ describe('api', () => {
 		await expect(api('POST', '/api/v1/orgs/acme/billing-runs', {})).rejects.toMatchObject({ status: 422, message: 'bad', invoiceID: undefined });
 	});
 
+	it('exposes import problems from a 422 body', async () => {
+		vi.mocked(fetch).mockResolvedValue(jsonResponse(422, { error: 'import has problems; preview again', problems: [{ row: 3, field: 'total', message: 'bad total' }] }));
+		await expect(api('POST', '/api/v1/orgs/acme/invoices/import', {})).rejects.toMatchObject({
+			status: 422, problems: [{ row: 3, field: 'total', message: 'bad total' }]
+		});
+	});
+
+	it('ignores a non-array problems field', async () => {
+		vi.mocked(fetch).mockResolvedValue(jsonResponse(422, { error: 'bad', problems: 'nope' }));
+		await expect(api('POST', '/x', {})).rejects.toMatchObject({ problems: undefined });
+	});
+
 	it('calls onUnauthorized on a 401 response and throws when it resolves false', async () => {
 		vi.mocked(fetch).mockResolvedValue(jsonResponse(401, { error: 'unauthorized' }));
 		const onUnauthorized = vi.fn(async () => false);

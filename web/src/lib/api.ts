@@ -5,15 +5,22 @@
 
 import { session } from './session.svelte';
 
+// ImportProblem is one row-numbered CSV import problem (row 0: the whole
+// file or its mapping).
+export type ImportProblem = { row: number; field?: string; message: string };
+
 export class ApiError extends Error {
 	status: number;
 	invoiceID?: number;
+	// problems is set when a CSV import's apply is refused (422).
+	problems?: ImportProblem[];
 
-	constructor(status: number, message: string, invoiceID?: number) {
+	constructor(status: number, message: string, invoiceID?: number, problems?: ImportProblem[]) {
 		super(message);
 		this.name = 'ApiError';
 		this.status = status;
 		this.invoiceID = invoiceID;
+		this.problems = problems;
 	}
 }
 
@@ -146,6 +153,7 @@ export async function api<T>(
 	if (!res.ok) {
 		let message = res.statusText;
 		let invoiceID: number | undefined;
+		let problems: ImportProblem[] | undefined;
 		try {
 			const data = await res.clone().json();
 			if (data && typeof data.error === 'string') {
@@ -153,6 +161,9 @@ export async function api<T>(
 			}
 			if (Number.isSafeInteger(data?.invoice_id) && data.invoice_id > 0) {
 				invoiceID = data.invoice_id;
+			}
+			if (Array.isArray(data?.problems)) {
+				problems = data.problems;
 			}
 		} catch {
 			// Body wasn't JSON (or was empty): fall back to statusText.
@@ -172,7 +183,7 @@ export async function api<T>(
 				redirectToLogin();
 			}
 		}
-		throw new ApiError(res.status, message, invoiceID);
+		throw new ApiError(res.status, message, invoiceID, problems);
 	}
 
 	// An empty body (204, or a 2xx with no content) is never valid JSON, so
