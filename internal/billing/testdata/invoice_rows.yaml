@@ -1,0 +1,37 @@
+- name: valid_paid_row
+  rows: [{num: 2, values: {number: " ACC-1 ", customer: Acme, issue_date: "2025-03-01", due_date: "2025-03-15", subtotal: "$1,000.00", gst: "100", total: "1100.00", outstanding: "0", paid_date: "2025-03-10"}}]
+  want: [{row: 2, number: ACC-1, customer: Acme, issue_date: "2025-03-01", due_date: "2025-03-15", paid_date: "2025-03-10", subtotal: 100000, gst: 10000, total: 110000, outstanding: 0}]
+- name: unpaid_row_needs_no_paid_date
+  rows: [{num: 2, values: {number: ACC-2, customer: Acme, issue_date: "2025-03-01", due_date: "2025-03-01", subtotal: "500", gst: "0", total: "500", outstanding: "500"}}]
+  want: [{row: 2, number: ACC-2, customer: Acme, issue_date: "2025-03-01", due_date: "2025-03-01", subtotal: 50000, gst: 0, total: 50000, outstanding: 50000}]
+- name: total_mismatch
+  rows: [{num: 2, values: {number: A, customer: Acme, issue_date: "2025-03-01", due_date: "2025-03-01", subtotal: "100", gst: "10", total: "111", outstanding: "111"}}]
+  problems: [{row: 2, field: total, message: total must equal subtotal plus GST}]
+- name: outstanding_out_of_range
+  rows: [{num: 2, values: {number: A, customer: Acme, issue_date: "2025-03-01", due_date: "2025-03-01", subtotal: "100", gst: "0", total: "100", outstanding: "101"}}]
+  problems: [{row: 2, field: outstanding, message: outstanding must be between 0 and total}]
+- name: due_before_issue
+  rows: [{num: 2, values: {number: A, customer: Acme, issue_date: "2025-03-02", due_date: "2025-03-01", subtotal: "100", gst: "0", total: "100", outstanding: "100"}}]
+  problems: [{row: 2, field: due_date, message: due date is before issue date}]
+- name: paid_date_required
+  rows: [{num: 2, values: {number: A, customer: Acme, issue_date: "2025-03-01", due_date: "2025-03-01", subtotal: "100", gst: "0", total: "100", outstanding: "40", paid_date: ""}}]
+  problems: [{row: 2, field: paid_date, message: paid date is required when anything has been paid}]
+- name: duplicate_number
+  rows:
+    - {num: 2, values: {number: A, customer: Acme, issue_date: "2025-03-01", due_date: "2025-03-01", subtotal: "100", gst: "0", total: "100", outstanding: "100"}}
+    - {num: 3, values: {number: " a ", customer: Acme, issue_date: "2025-03-01", due_date: "2025-03-01", subtotal: "100", gst: "0", total: "100", outstanding: "100"}}
+  want: [{row: 2, number: A, customer: Acme, issue_date: "2025-03-01", due_date: "2025-03-01", subtotal: 10000, gst: 0, total: 10000, outstanding: 10000}]
+  problems: [{row: 3, field: number, message: invoice number appears more than once}]
+- name: invalid_values
+  rows: [{num: 2, values: {number: "", customer: "", issue_date: "1/3/25", due_date: "2025-03-01", subtotal: "abc", gst: "-1", total: "", outstanding: "0", paid_date: "nope"}}]
+  problems:
+    - {row: 2, field: number, message: number is required}
+    - {row: 2, field: customer, message: customer is required}
+    - {row: 2, field: issue_date, message: invalid issue_date}
+    - {row: 2, field: subtotal, message: invalid subtotal}
+    - {row: 2, field: gst, message: gst must not be negative}
+    - {row: 2, field: total, message: invalid total}
+    - {row: 2, field: paid_date, message: invalid paid_date}
+- name: zero_total
+  rows: [{num: 2, values: {number: A, customer: Acme, issue_date: "2025-03-01", due_date: "2025-03-01", subtotal: "0", gst: "0", total: "0", outstanding: "0"}}]
+  problems: [{row: 2, field: total, message: total must be more than zero}]
