@@ -571,3 +571,59 @@ func TestVoidRefusesInvoiceWithPayments(t *testing.T) {
 		t.Fatalf("status = %s, want open (refused void must not change it)", inv.Status)
 	}
 }
+
+func TestImportInvoiceKeepsDatesAndAmounts(t *testing.T) {
+	e := testkit.New(t)
+	org := e.Org("acme")
+	contactID := e.Contact(org, testkit.Kind("client")).ID
+
+	issue := time.Date(2025, 3, 1, 0, 0, 0, 0, time.UTC)
+	due := time.Date(2025, 3, 15, 0, 0, 0, 0, time.UTC)
+	inv, err := core.ImportInvoice(e.Ctx, e.Pool, org.ID, core.ImportedInvoice{
+		ContactID: contactID, ExternalRef: "import:ACC-SINV-1", IssueDate: issue, DueDate: due,
+		Description: "Imported from ERPNext ACC-SINV-1", Subtotal: 100000, GST: 10000, GSTCode: core.GST,
+	})
+	if err != nil {
+		t.Fatalf("ImportInvoice: %v", err)
+	}
+	if inv.Status != "open" || inv.Source != "manual" || inv.ExternalRef != "import:ACC-SINV-1" {
+		t.Errorf("status/source/ref = %s/%s/%s, want open/manual/import:ACC-SINV-1", inv.Status, inv.Source, inv.ExternalRef)
+	}
+	if inv.IssueDate == nil || !inv.IssueDate.Equal(issue) || inv.DueDate == nil || !inv.DueDate.Equal(due) {
+		t.Errorf("dates = %v/%v, want %v/%v", inv.IssueDate, inv.DueDate, issue, due)
+	}
+	if inv.Subtotal != 100000 || inv.GSTTotal != 10000 || inv.Total != 110000 {
+		t.Errorf("totals = %d/%d/%d, want 100000/10000/110000", inv.Subtotal, inv.GSTTotal, inv.Total)
+	}
+	if inv.PaymentReference == "" || inv.Number == nil || *inv.Number != 1 {
+		t.Errorf("payment ref %q number %v, want non-empty and 1", inv.PaymentReference, inv.Number)
+	}
+	if len(inv.Lines) != 1 {
+		t.Fatalf("lines = %d, want 1", len(inv.Lines))
+	}
+	l := inv.Lines[0]
+	if l.Description != "Imported from ERPNext ACC-SINV-1" || l.QuantityMilli != 1000 || l.UnitAmount != 100000 ||
+		l.Amount != 100000 || l.GSTCode != core.GST || l.GSTAmount != 10000 {
+		t.Errorf("line = %+v", l)
+	}
+}
+
+func TestImportInvoiceContinuesCounter(t *testing.T) {
+	e := testkit.New(t)
+	org := e.Org("acme")
+	contactID := e.Contact(org, testkit.Kind("client")).ID
+	today := time.Now()
+
+	first := e.Invoice(org, contactID, testkit.Issued(today))
+	imported, err := core.ImportInvoice(e.Ctx, e.Pool, org.ID, core.ImportedInvoice{
+		ContactID: contactID, ExternalRef: "import:X", IssueDate: today, DueDate: today,
+		Description: "x", Subtotal: 500, GSTCode: core.FRE,
+	})
+	if err != nil {
+		t.Fatalf("ImportInvoice: %v", err)
+	}
+	last := e.Invoice(org, contactID, testkit.Issued(today))
+	if *first.Number != 1 || *imported.Number != 2 || *last.Number != 3 {
+		t.Errorf("numbers = %d, %d, %d; want 1, 2, 3", *first.Number, *imported.Number, *last.Number)
+	}
+}

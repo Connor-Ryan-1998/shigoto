@@ -363,6 +363,71 @@ func CreateDraftInvoice(ctx context.Context, q Querier, orgID int64, in NewInvoi
 	return GetInvoice(ctx, q, orgID, invoiceID)
 }
 
+// nextInvoiceNumber takes the next gap-free invoice number for orgID,
+// locking its invoice_counters row until the caller's transaction ends (so
+// a rollback releases the number).
+func nextInvoiceNumber(ctx context.Context, q Querier, orgID int64) (int, error) {
+	var number int
+	err := q.QueryRow(ctx, `
+		INSERT INTO invoice_counters (org_id, last_number) VALUES ($1, 1)
+		ON CONFLICT (org_id) DO UPDATE SET last_number = invoice_counters.last_number + 1
+		RETURNING last_number`,
+		orgID,
+	).Scan(&number)
+	return number, err
+}
+
+// ImportedInvoice is an invoice issued in another system (ERPNext), to be
+// recorded as already issued.
+type ImportedInvoice struct {
+	ContactID   int64
+	ExternalRef string // "import:<number>"
+	IssueDate   time.Time
+	DueDate     time.Time
+	Description string
+	Subtotal    Cents // ex GST
+	GST         Cents
+	GSTCode     GSTCode // GST or FRE
+}
+
+// ImportInvoice inserts an already-issued invoice: status 'open', source
+// 'manual', the given dates, the next number from invoice_counters, a
+// random payment reference, and one line (quantity 1, unit and amount =
+// Subtotal, gst_amount = GST). Totals are stored as given, not recomputed:
+// they are what the client was billed. It never sends anything. Run it in
+// the caller's transaction so a rollback also releases the number.
+func ImportInvoice(ctx context.Context, q Querier, orgID int64, in ImportedInvoice) (Invoice, error) {
+	number, err := nextInvoiceNumber(ctx, q, orgID)
+	if err != nil {
+		return Invoice{}, err
+	}
+	ref, err := generatePaymentReference()
+	if err != nil {
+		return Invoice{}, err
+	}
+	total := in.Subtotal + in.GST
+	var id int64
+	err = q.QueryRow(ctx, `
+		INSERT INTO invoices (org_id, contact_id, number, source, status, issue_date, due_date, currency,
+			subtotal, gst_total, total, payment_reference, external_ref)
+		VALUES ($1, $2, $3, 'manual', 'open', $4, $5, 'AUD', $6, $7, $8, $9, $10)
+		RETURNING id`,
+		orgID, in.ContactID, number, in.IssueDate, in.DueDate,
+		int64(in.Subtotal), int64(in.GST), int64(total), ref, in.ExternalRef,
+	).Scan(&id)
+	if err != nil {
+		return Invoice{}, err
+	}
+	if _, err := q.Exec(ctx, `
+		INSERT INTO invoice_lines (invoice_id, org_id, description, quantity_milli, unit_amount, gst_code, gst_amount, amount)
+		VALUES ($1, $2, $3, 1000, $4, $5, $6, $4)`,
+		id, orgID, in.Description, int64(in.Subtotal), string(in.GSTCode), int64(in.GST),
+	); err != nil {
+		return Invoice{}, err
+	}
+	return GetInvoice(ctx, q, orgID, id)
+}
+
 // IssueInvoice assigns the next gap-free invoice number for orgID (locking
 // invoice_counters for the duration of the caller's transaction) and sets
 // issue_date, due_date (today + the draft's due_in_days) and status 'open'.
@@ -391,13 +456,7 @@ func IssueInvoice(ctx context.Context, tx Querier, orgID, id int64, today time.T
 		return Invoice{}, fmt.Errorf("%w: cannot issue an invoice with a zero total", ErrInvalidInput)
 	}
 
-	var number int
-	err = tx.QueryRow(ctx, `
-		INSERT INTO invoice_counters (org_id, last_number) VALUES ($1, 1)
-		ON CONFLICT (org_id) DO UPDATE SET last_number = invoice_counters.last_number + 1
-		RETURNING last_number`,
-		orgID,
-	).Scan(&number)
+	number, err := nextInvoiceNumber(ctx, tx, orgID)
 	if err != nil {
 		return Invoice{}, err
 	}
