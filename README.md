@@ -94,9 +94,11 @@ time billing, lease/rent-run idempotency, reconciliation and CSV reporting.
 build plugin (four low-severity npm package entries for one advisory). The
 registry's latest deepmerge version is still 4.3.1. The reviewed plugin usage
 merges repository-controlled build configuration, not runtime request input;
-this is not proof that every build-tool input is safe. No exception or forced
-downgrade was accepted: the audit gate intentionally remains red until a safe
-upstream fix is verified or an operator explicitly approves a scoped exception.
+this is not proof that every build-tool input is safe. On 2026-11-15 the operator
+approved a scoped exception for this one advisory on `deepmerge`, expiring
+2027-02-15. `task audit` runs `web/scripts/audit.mjs`, which fails on any other
+advisory and on the exception once it expires. Re-review it then, and remove
+it once an upstream fix exists.
 
 Historical settings audit records have **not** been rewritten and may still
 contain bank details. Existing limitations also remain: credit notes/refunds and

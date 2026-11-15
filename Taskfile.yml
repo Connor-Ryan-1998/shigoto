@@ -19,7 +19,7 @@ tasks:
     desc: Check Go and all npm dependencies for published vulnerabilities (requires network).
     cmds:
       - go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
-      - npm --prefix web audit
+      - node web/scripts/audit.mjs
 
   test:
     desc: Run tests. SUITE=unit (default) or integration; PACKAGES defaults to ./....
