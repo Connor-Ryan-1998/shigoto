@@ -156,6 +156,14 @@ func registerRoutes(mux *http.ServeMux, d module.Deps) {
 		d.Auth.RequireOrg(auth.PermTimesheetsAdmin)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			updateTask(w, r, d)
 		})))
+	mux.Handle("POST /api/v1/orgs/{org}/time-entries/import/preview",
+		d.Auth.RequireOrg(auth.PermImport)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			importEntries(w, r, d, false)
+		})))
+	mux.Handle("POST /api/v1/orgs/{org}/time-entries/import",
+		d.Auth.RequireOrg(auth.PermImport)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			importEntries(w, r, d, true)
+		})))
 	mux.Handle("POST /api/v1/orgs/{org}/time-entries",
 		d.Auth.RequireOrg(auth.PermTimesheetsWrite)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			createEntry(w, r, d)

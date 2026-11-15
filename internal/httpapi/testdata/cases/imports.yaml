@@ -42,3 +42,26 @@ cases:
     as: outsider
     request: {method: POST, path: /api/v1/orgs/acme/invoices/import/preview}
     expect: {status: 404, body: {error: not found}, exact: true}
+
+  - name: staff cannot preview a time import
+    as: staff
+    request: {method: POST, path: /api/v1/orgs/acme/time-entries/import/preview}
+    expect: {status: 403, body: {error: forbidden}, exact: true}
+
+  - name: staff cannot apply a time import
+    as: staff
+    request: {method: POST, path: /api/v1/orgs/acme/time-entries/import}
+    expect: {status: 403, body: {error: forbidden}, exact: true}
+    unchanged: [time_entries, audit_log]
+
+  - name: bookkeeper cannot apply a time import
+    as: keeper
+    request: {method: POST, path: /api/v1/orgs/acme/time-entries/import}
+    expect: {status: 403, body: {error: forbidden}, exact: true}
+    unchanged: [time_entries, audit_log]
+
+  - name: another org's owner cannot apply a time import
+    as: outsider
+    request: {method: POST, path: /api/v1/orgs/acme/time-entries/import}
+    expect: {status: 404, body: {error: not found}, exact: true}
+    unchanged: [time_entries, audit_log]
