@@ -1,0 +1,44 @@
+# CSV import endpoints: owner only, org isolated. Permission gates run
+# before the body is read, so these cases send no upload.
+seed:
+  orgs: [acme, other]
+  users:
+    owner: {org: acme, role: owner}
+    staff: {org: acme, role: staff}
+    keeper: {org: acme, role: bookkeeper}
+    outsider: {org: other, role: owner}
+
+cases:
+  - name: staff cannot preview an invoice import
+    as: staff
+    request: {method: POST, path: /api/v1/orgs/acme/invoices/import/preview}
+    expect: {status: 403, body: {error: forbidden}, exact: true}
+    unchanged: [invoices, payments, audit_log]
+
+  - name: staff cannot apply an invoice import
+    as: staff
+    request: {method: POST, path: /api/v1/orgs/acme/invoices/import}
+    expect: {status: 403, body: {error: forbidden}, exact: true}
+    unchanged: [invoices, payments, audit_log]
+
+  - name: bookkeeper cannot preview an invoice import
+    as: keeper
+    request: {method: POST, path: /api/v1/orgs/acme/invoices/import/preview}
+    expect: {status: 403, body: {error: forbidden}, exact: true}
+
+  - name: bookkeeper cannot apply an invoice import
+    as: keeper
+    request: {method: POST, path: /api/v1/orgs/acme/invoices/import}
+    expect: {status: 403, body: {error: forbidden}, exact: true}
+    unchanged: [invoices, payments, audit_log]
+
+  - name: another org's owner cannot apply an invoice import
+    as: outsider
+    request: {method: POST, path: /api/v1/orgs/acme/invoices/import}
+    expect: {status: 404, body: {error: not found}, exact: true}
+    unchanged: [invoices, payments, audit_log]
+
+  - name: another org's owner cannot preview an invoice import
+    as: outsider
+    request: {method: POST, path: /api/v1/orgs/acme/invoices/import/preview}
+    expect: {status: 404, body: {error: not found}, exact: true}

@@ -145,6 +145,7 @@ func New(d Deps) http.Handler {
 	})
 
 	registerCoreRoutes(mux, d)
+	registerImportRoutes(mux, d)
 	registerSettingsRoutes(mux, d)
 	registerWebhookRoutes(mux, d)
 	registerMeRoutes(mux, d)

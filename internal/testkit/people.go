@@ -267,6 +267,30 @@ func (s Session) Upload(path, filename string, data []byte) Response {
 	return s.DoWith(http.MethodPost, path, &body, map[string]string{"Content-Type": w.FormDataContentType()})
 }
 
+// UploadForm posts data as the multipart "file" field named filename,
+// plus each of fields as a plain form field, to path.
+func (s Session) UploadForm(path, filename string, data []byte, fields map[string]string) Response {
+	s.env.T.Helper()
+	var body bytes.Buffer
+	w := multipart.NewWriter(&body)
+	part, err := w.CreateFormFile("file", filename)
+	if err == nil {
+		_, err = part.Write(data)
+	}
+	for k, v := range fields {
+		if err == nil {
+			err = w.WriteField(k, v)
+		}
+	}
+	if err == nil {
+		err = w.Close()
+	}
+	if err != nil {
+		s.env.T.Fatalf("building multipart body: %v", err)
+	}
+	return s.DoWith(http.MethodPost, path, &body, map[string]string{"Content-Type": w.FormDataContentType()})
+}
+
 // PNG is a minimal valid 1x1 PNG, enough for http.DetectContentType to
 // sniff it as image/png.
 var PNG = []byte{
