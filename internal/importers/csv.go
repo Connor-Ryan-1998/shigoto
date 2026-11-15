@@ -43,11 +43,30 @@ type CSVMapping struct {
 	DescriptionColumn int    `json:"description_column"`
 }
 
-// knownDateFormats are the layouts a CSVMapping.DateFormat may name.
+// DateFormats are the Go date layouts an import may name, in display
+// order: DD/MM/YYYY, YYYY-MM-DD and D Mon YYYY.
+var DateFormats = []string{"02/01/2006", "2006-01-02", "2 Jan 2006"}
+
+// knownDateFormats is DateFormats as a set.
 var knownDateFormats = map[string]bool{
-	"02/01/2006": true,
-	"2006-01-02": true,
-	"2 Jan 2006": true,
+	DateFormats[0]: true,
+	DateFormats[1]: true,
+	DateFormats[2]: true,
+}
+
+// ParseDate parses raw (trimmed) with format, which must be one of
+// DateFormats, returning UTC midnight of that calendar date. Errors wrap
+// core.ErrInvalidInput.
+func ParseDate(format, raw string) (time.Time, error) {
+	if !knownDateFormats[format] {
+		return time.Time{}, fmt.Errorf("%w: unsupported date format", core.ErrInvalidInput)
+	}
+	parsed, err := time.ParseInLocation(format, strings.TrimSpace(raw), time.UTC)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("%w: invalid date %q", core.ErrInvalidInput, raw)
+	}
+	y, m, d := parsed.Date()
+	return time.Date(y, m, d, 0, 0, 0, 0, time.UTC), nil
 }
 
 // Validate checks m is internally consistent: exactly one amount style
@@ -147,16 +166,16 @@ func (s csvSource) Lines(r io.Reader) ([]Line, error) {
 
 		var amount core.Cents
 		if s.m.AmountColumn != nil {
-			amount, err = parseAmountCents(row[*s.m.AmountColumn])
+			amount, err = ParseAmountCents(row[*s.m.AmountColumn])
 			if err != nil {
 				return nil, fmt.Errorf("%w: row %d: %v", core.ErrInvalidInput, rowNum, err)
 			}
 		} else {
-			debit, err := parseAmountCents(row[*s.m.DebitColumn])
+			debit, err := ParseAmountCents(row[*s.m.DebitColumn])
 			if err != nil {
 				return nil, fmt.Errorf("%w: row %d: %v", core.ErrInvalidInput, rowNum, err)
 			}
-			credit, err := parseAmountCents(row[*s.m.CreditColumn])
+			credit, err := ParseAmountCents(row[*s.m.CreditColumn])
 			if err != nil {
 				return nil, fmt.Errorf("%w: row %d: %v", core.ErrInvalidInput, rowNum, err)
 			}
@@ -175,7 +194,7 @@ func (s csvSource) Lines(r io.Reader) ([]Line, error) {
 	return lines, nil
 }
 
-// parseAmountCents parses one amount cell into cents, using integer
+// ParseAmountCents parses one amount cell into cents, using integer
 // arithmetic only (no float parsing, so there's no rounding error to
 // worry about). A blank cell is 0. Accepted forms: "1234.56",
 // "1,234.56", "-12.30", "(12.30)" (parentheses mean negative), "+5.00",
@@ -184,7 +203,7 @@ func (s csvSource) Lines(r io.Reader) ([]Line, error) {
 // After those are stripped the integer part must be 1-15 ASCII digits and
 // the fraction 0-2 ASCII digits, so a stray sign inside the number
 // ("1.-5", "1-2") or a value too large for cents is rejected.
-func parseAmountCents(raw string) (core.Cents, error) {
+func ParseAmountCents(raw string) (core.Cents, error) {
 	s := strings.TrimSpace(raw)
 	if s == "" {
 		return 0, nil

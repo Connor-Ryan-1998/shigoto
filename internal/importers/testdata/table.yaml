@@ -1,0 +1,65 @@
+- name: maps_by_header_case_insensitive
+  csv: "Invoice No, Customer\nINV-1,Acme\n"
+  mapping: {columns: {number: " invoice no ", customer: CUSTOMER}, date_format: "2006-01-02"}
+  fields: [{key: number, required: true}, {key: customer, required: true}]
+  rows: [{num: 2, values: {number: INV-1, customer: Acme}}]
+- name: unmapped_optional_field_absent
+  csv: "A,B\n1,2\n"
+  mapping: {columns: {x: A}, date_format: "2006-01-02"}
+  fields: [{key: x, required: true}, {key: y}]
+  rows: [{num: 2, values: {x: "1"}}]
+- name: empty_mapping_value_is_unmapped
+  csv: "A,B\n1,2\n"
+  mapping: {columns: {x: A, y: ""}, date_format: "2006-01-02"}
+  fields: [{key: x, required: true}, {key: y}]
+  rows: [{num: 2, values: {x: "1"}}]
+- name: bom_crlf_blank_rows
+  csv: "﻿A,B\r\n1,2\r\n\r\n,\r\n"
+  mapping: {columns: {x: A, y: B}, date_format: "2006-01-02"}
+  fields: [{key: x, required: true}, {key: y, required: true}]
+  rows: [{num: 2, values: {x: "1", y: "2"}}]
+- name: short_row_gives_blank_values
+  csv: "A,B\n1\n"
+  mapping: {columns: {x: A, y: B}, date_format: "2006-01-02"}
+  fields: [{key: x, required: true}, {key: y, required: true}]
+  rows: [{num: 2, values: {x: "1", y: ""}}]
+- name: cells_trimmed
+  csv: "A\n\"  padded  \"\n"
+  mapping: {columns: {x: A}, date_format: "2006-01-02"}
+  fields: [{key: x, required: true}]
+  rows: [{num: 2, values: {x: padded}}]
+- name: duplicate_header
+  csv: "A,A\n1,2\n"
+  mapping: {columns: {x: A}, date_format: "2006-01-02"}
+  fields: [{key: x, required: true}]
+  problems: [{row: 0, field: x, message: "header \"A\" appears more than once"}]
+- name: missing_header
+  csv: "A\n1\n"
+  mapping: {columns: {x: Nope}, date_format: "2006-01-02"}
+  fields: [{key: x, required: true}]
+  problems: [{row: 0, field: x, message: "header \"Nope\" not found"}]
+- name: required_unmapped
+  csv: "A\n1\n"
+  mapping: {columns: {}, date_format: "2006-01-02"}
+  fields: [{key: x, required: true}]
+  problems: [{row: 0, field: x, message: "x must be mapped"}]
+- name: unknown_field_in_mapping
+  csv: "A\n1\n"
+  mapping: {columns: {x: A, bogus: A}, date_format: "2006-01-02"}
+  fields: [{key: x, required: true}]
+  problems: [{row: 0, field: bogus, message: "unknown field"}]
+- name: bad_date_format
+  csv: "A\n1\n"
+  mapping: {columns: {x: A}, date_format: "01/02/2006"}
+  fields: [{key: x, required: true}]
+  problems: [{row: 0, field: date_format, message: "unsupported date format"}]
+- name: empty_file
+  csv: ""
+  mapping: {columns: {x: A}, date_format: "2006-01-02"}
+  fields: [{key: x, required: true}]
+  problems: [{row: 0, message: "file has no header row"}]
+- name: malformed_csv
+  csv: "A\n\"unterminated\n"
+  mapping: {columns: {x: A}, date_format: "2006-01-02"}
+  fields: [{key: x, required: true}]
+  problems: [{row: 0, message: "file is not valid CSV"}]
