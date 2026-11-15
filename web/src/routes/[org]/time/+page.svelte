@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { page } from '$app/state';
+	import { goto } from '$app/navigation';
+	import Button from '../../../lib/components/Button.svelte';
 	import { api, ApiError } from '../../../lib/api';
 	import { todayLocal } from '../../../lib/format';
 	import { session } from '../../../lib/session.svelte';
@@ -30,6 +32,7 @@
 	const canRead = $derived(membership?.perms.includes('timesheets_read') ?? false);
 	const canWrite = $derived(membership?.perms.includes('timesheets_write') ?? false);
 	const isAdmin = $derived(membership?.perms.includes('timesheets_admin') ?? false);
+	const canImport = $derived(membership?.perms.includes('import') ?? false);
 
 	let status = $state<Status>('unbilled');
 	let period = $state<Period>('all');
@@ -168,6 +171,9 @@
 	</div>
 	{/snippet}
 	{#snippet actions()}
+	{#if canImport}
+		<Button variant="secondary" onclick={() => goto(`/${org}/time/import`)}>Import</Button>
+	{/if}
 	{#if canWrite}
 		<button type="button" class="btn btn-primary" onclick={openNew}>+ New Log Entry</button>
 	{/if}

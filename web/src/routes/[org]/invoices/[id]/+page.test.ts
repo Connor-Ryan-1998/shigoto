@@ -40,6 +40,19 @@ describe('invoice detail status actions', () => {
 		signIn({ perms: ['invoices_read', 'invoices_write', 'payments_write'] });
 	});
 
+	it('shows the reference of an imported invoice', async () => {
+		mockApi({ [`GET ${BASE}`]: invoice({ external_ref: 'import:ACC-SINV-1' }) });
+		render(Page);
+		expect(await screen.findByText('Imported as ACC-SINV-1')).toBeTruthy();
+	});
+
+	it('shows no import reference on a normal invoice', async () => {
+		mockApi({ [`GET ${BASE}`]: invoice({ external_ref: '' }) });
+		render(Page);
+		await screen.findByText('Jane Client');
+		expect(screen.queryByText(/Imported as/)).toBeNull();
+	});
+
 	it('offers write-off, not reinstate, on an open invoice', async () => {
 		mockApi({ [`GET ${BASE}`]: invoice() });
 		render(Page);

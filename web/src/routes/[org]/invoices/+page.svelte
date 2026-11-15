@@ -52,6 +52,10 @@
 			(session.currentOrg?.perms.includes('invoices_write') ?? false)
 	);
 
+	const canImport = $derived(
+		session.currentOrg?.slug === page.params.org && (session.currentOrg?.perms.includes('import') ?? false)
+	);
+
 	function openBillingRun() {
 		const today = todayLocal();
 		billingFrom = `${today.slice(0, 7)}-01`;
@@ -116,6 +120,9 @@
 	{#snippet actions()}
 		{#if canBill}
 			<Button variant="secondary" onclick={openBillingRun}>Billing run</Button>
+		{/if}
+		{#if canImport}
+			<Button variant="secondary" onclick={() => goto(`/${page.params.org}/invoices/import`)}>Import</Button>
 		{/if}
 		<Button onclick={() => goto(`/${page.params.org}/invoices/new`)}>New invoice</Button>
 	{/snippet}

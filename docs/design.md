@@ -99,7 +99,7 @@ One small self-hosted app, shipped as one Go binary plus Postgres, that runs a m
 | Ledger | Categorised, not double-entry. |
 | V1 scope | All three flows, thin. |
 | Stack | Go. Matches `apps/monitoring`. |
-| History | Start clean. No Ailo import. |
+| History | Start clean. No Ailo import. ERPNext invoices and time come in through the owner-only CSV import (Invoices and Time screens). |
 | State | QLD. |
 | Payment methods | At least 2 per invoice: Stripe, bank transfer, PayID. Applies to rent and bond. |
 

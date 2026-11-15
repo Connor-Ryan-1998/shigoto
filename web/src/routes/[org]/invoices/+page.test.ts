@@ -47,3 +47,26 @@ describe('invoices page billing run', () => {
 		expect(screen.queryByRole('button', { name: 'Billing run' })).toBeNull();
 	});
 });
+
+describe('invoices page import', () => {
+	beforeEach(() => {
+		setPage({ params: { org: 'acme' }, url: 'http://localhost/acme/invoices' });
+	});
+
+	it('offers Import to an owner with the import permission', async () => {
+		signIn({ perms: ['invoices_read', 'invoices_write', 'import'] });
+		mockApi({ [LIST]: { invoices: [], total: 0 } });
+		render(Page);
+		await fireEvent.click(await screen.findByRole('button', { name: 'Import' }));
+		const { goto } = await import('../../../lib/test/app.svelte');
+		expect(goto).toHaveBeenCalledWith('/acme/invoices/import');
+	});
+
+	it('hides Import without the import permission', async () => {
+		signIn({ perms: ['invoices_read', 'invoices_write'] });
+		mockApi({ [LIST]: { invoices: [], total: 0 } });
+		render(Page);
+		await screen.findByText('No invoices in this view');
+		expect(screen.queryByRole('button', { name: 'Import' })).toBeNull();
+	});
+});

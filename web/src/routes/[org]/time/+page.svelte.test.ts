@@ -44,6 +44,24 @@ beforeEach(() => {
 	apiMock.mockImplementation(route);
 });
 
+describe('time import action', () => {
+	it('offers Import with the import permission', async () => {
+		const me = session.me!;
+		session.setMe({ ...me, orgs: me.orgs.map((o) => ({ ...o, perms: [...o.perms, 'import'] })) });
+		render(Page);
+		await screen.findByText('Design');
+		const { goto } = await import('../../../lib/test/app.svelte');
+		await fireEvent.click(screen.getByRole('button', { name: 'Import' }));
+		expect(goto).toHaveBeenCalledWith('/acme/time/import');
+	});
+
+	it('hides Import without the import permission', async () => {
+		render(Page);
+		await screen.findByText('Design');
+		expect(screen.queryByRole('button', { name: 'Import' })).toBeNull();
+	});
+});
+
 describe('time logging page', () => {
 	it('defaults to unbilled time and lists entries newest first with billing status', async () => {
 		render(Page);

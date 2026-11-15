@@ -49,6 +49,7 @@
 		lines: Line[];
 		payments: Payment[];
 		provider_url: string;
+		external_ref?: string;
 	};
 
 	const STATUS_TONE: Record<string, 'success' | 'warning' | 'danger' | 'info'> = {
@@ -268,6 +269,10 @@
 			<StatusBadge status={inv.status} tone={STATUS_TONE[inv.status] ?? 'info'} />
 		{/snippet}
 	</PageHeader>
+
+	{#if inv.external_ref?.startsWith('import:')}
+		<p class="mb-3 text-sm text-base-content/70">Imported as {inv.external_ref.slice('import:'.length)}</p>
+	{/if}
 
 	{#if refreshing}
 		<p class="mb-3 text-sm text-base-content/70" aria-live="polite">Refreshing…</p>
