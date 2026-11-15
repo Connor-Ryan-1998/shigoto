@@ -49,9 +49,11 @@ type ImportResult struct {
 func ImportRef(number string) string { return "import:" + number }
 
 // ParseInvoiceRows converts mapped CSV rows into InvoiceRows, checking
-// everything that needs no database. Rows with problems are left out.
+// everything that needs no database; today is the org's current date
+// (issue and paid dates can't be after it - a day/month swap usually lands
+// there - while due dates may be). Rows with problems are left out.
 // Problems are in row order; it never returns a nil problems slice.
-func ParseInvoiceRows(rows []importers.Row, dateFormat string) ([]InvoiceRow, []importers.Problem) {
+func ParseInvoiceRows(rows []importers.Row, dateFormat string, today time.Time) ([]InvoiceRow, []importers.Problem) {
 	out := []InvoiceRow{}
 	problems := []importers.Problem{}
 	seen := map[string]bool{}
@@ -114,8 +116,16 @@ func ParseInvoiceRows(rows []importers.Row, dateFormat string) ([]InvoiceRow, []
 			if row.Outstanding > row.Total {
 				add("outstanding", "outstanding must be between 0 and total")
 			}
+			if row.IssueDate.After(today) {
+				add("issue_date", "issue date is in the future")
+			}
 			if row.DueDate.Before(row.IssueDate) {
 				add("due_date", "due date is before issue date")
+			}
+			if row.PaidDate != nil && row.PaidDate.After(today) {
+				add("paid_date", "paid date is in the future")
+			} else if row.PaidDate != nil && row.PaidDate.Before(row.IssueDate) {
+				add("paid_date", "paid date is before issue date")
 			}
 			if row.Outstanding < row.Total && row.PaidDate == nil {
 				add("paid_date", "paid date is required when anything has been paid")

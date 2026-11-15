@@ -47,7 +47,7 @@ func TestParseInvoiceRows(t *testing.T) {
 			for i, r := range c.Rows {
 				in[i] = importers.Row{Num: r.Num, Values: r.Values}
 			}
-			got, problems := ParseInvoiceRows(in, "2006-01-02")
+			got, problems := ParseInvoiceRows(in, "2006-01-02", time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC))
 
 			want := []InvoiceRow{}
 			for _, w := range c.Want {

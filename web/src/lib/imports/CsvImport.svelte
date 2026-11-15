@@ -51,7 +51,17 @@
 
 	const dirty = $derived(file !== null && done === null);
 	const { allowLeave } = useUnsavedChanges(() => dirty, () => busy);
-	const headerOptions = $derived([{ value: '', label: '— not mapped —' }, ...headers.map((h) => ({ value: h, label: h }))]);
+	// One option per distinct non-blank header. A repeated header is still
+	// offered (labelled), so mapping it lets the server name the problem
+	// rather than the page guessing which copy was meant.
+	const headerOptions = $derived.by(() => {
+		const counts = new Map<string, number>();
+		for (const h of headers) if (h.trim() !== '') counts.set(h, (counts.get(h) ?? 0) + 1);
+		return [
+			{ value: '', label: '— not mapped —' },
+			...[...counts].map(([h, n]) => ({ value: h, label: n > 1 ? `${h} (appears ${n} times)` : h }))
+		];
+	});
 	const canImport = $derived(preview !== null && preview.problems.length === 0 && preview.new > 0 && !busy);
 
 	async function pickFile(event: Event) {

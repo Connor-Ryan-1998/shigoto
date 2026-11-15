@@ -122,6 +122,14 @@ describe('CsvImport', () => {
 		await waitFor(() => expect(lastBody().get('file')).toBeInstanceOf(File));
 	});
 
+	it('offers duplicate and blank headers safely so the server can name the problem', async () => {
+		render(CsvImport, props);
+		await pick('Invoice number,ID,,ID\nA-1,1,,2\n');
+		const total = screen.getByLabelText('Total') as HTMLSelectElement;
+		expect([...total.options].map((o) => o.text)).toEqual(['— not mapped —', 'Invoice number', 'ID (appears 2 times)']);
+		expect([...total.options].map((o) => o.value)).toEqual(['', 'Invoice number', 'ID']);
+	});
+
 	it('cancels back to the list', async () => {
 		render(CsvImport, props);
 		await fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));

@@ -222,3 +222,53 @@ func TestEntryImportHTTPProblemsRollBack(t *testing.T) {
 		t.Error("422 apply wrote entries")
 	}
 }
+
+// Voiding an imported invoice unbills its time; re-importing the corrected
+// invoice and the same time file links that time again, without duplicates.
+func TestEntryImportRelinksAfterVoid(t *testing.T) {
+	f := newImportFixture(t)
+	rows := []timesheets.EntryRow{entryRow(2, "owner@example.com", "ACC-1")}
+	if _, err := timesheets.ImportEntries(f.e.Ctx, f.e.Pool, f.org.ID, nil, rows, true); err != nil {
+		t.Fatal(err)
+	}
+	var invoiceID int64
+	if err := f.e.Pool.QueryRow(f.e.Ctx, `SELECT id FROM invoices WHERE external_ref = 'import:ACC-1'`).Scan(&invoiceID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.e.BillingService().Void(f.e.Ctx, f.org.ID, "acme", invoiceID); err != nil {
+		t.Fatalf("Void: %v", err)
+	}
+
+	// Time against a voided invoice is not "imported" any more.
+	res, err := timesheets.ImportEntries(f.e.Ctx, f.e.Pool, f.org.ID, nil, rows, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Problems) != 1 || res.Problems[0].Message != "invoice ACC-1 has not been imported" {
+		t.Fatalf("problems after void = %+v", res.Problems)
+	}
+
+	if _, err := billing.ImportInvoices(f.e.Ctx, f.e.Pool, f.org.ID, nil, []billing.InvoiceRow{{
+		Row: 2, Number: "ACC-1", Customer: "Acme Pty Ltd", IssueDate: importDay, DueDate: importDay,
+		Subtotal: 1000, Total: 1000, Outstanding: 1000,
+	}}, true); err != nil {
+		t.Fatal(err)
+	}
+	res, err = timesheets.ImportEntries(f.e.Ctx, f.e.Pool, f.org.ID, nil, rows, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.New != 1 || res.Existing != 0 || len(res.Problems) != 0 {
+		t.Fatalf("relink result = %+v, want the unbilled entry counted as new", res)
+	}
+	var newLine int64
+	if err := f.e.Pool.QueryRow(f.e.Ctx, `SELECT l.id FROM invoice_lines l JOIN invoices i ON i.id = l.invoice_id WHERE i.external_ref = 'import:ACC-1'`).Scan(&newLine); err != nil {
+		t.Fatal(err)
+	}
+	if n := f.e.Count("time_entries", "org_id = $1", f.org.ID); n != 1 {
+		t.Errorf("entries = %d, want 1 (relinked, not duplicated)", n)
+	}
+	if n := f.e.Count("time_entries", "org_id = $1 AND invoice_line_id = $2", f.org.ID, newLine); n != 1 {
+		t.Errorf("entries on the corrected invoice = %d, want 1", n)
+	}
+}

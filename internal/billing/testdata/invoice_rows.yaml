@@ -35,3 +35,15 @@
 - name: zero_total
   rows: [{num: 2, values: {number: A, customer: Acme, issue_date: "2025-03-01", due_date: "2025-03-01", subtotal: "0", gst: "0", total: "0", outstanding: "0"}}]
   problems: [{row: 2, field: total, message: total must be more than zero}]
+- name: future_issue_date
+  rows: [{num: 2, values: {number: A, customer: Acme, issue_date: "2025-06-02", due_date: "2025-06-30", subtotal: "100", gst: "0", total: "100", outstanding: "100"}}]
+  problems: [{row: 2, field: issue_date, message: issue date is in the future}]
+- name: future_paid_date
+  rows: [{num: 2, values: {number: A, customer: Acme, issue_date: "2025-03-01", due_date: "2025-03-01", subtotal: "100", gst: "0", total: "100", outstanding: "0", paid_date: "2025-06-02"}}]
+  problems: [{row: 2, field: paid_date, message: paid date is in the future}]
+- name: paid_before_issue
+  rows: [{num: 2, values: {number: A, customer: Acme, issue_date: "2025-03-01", due_date: "2025-03-01", subtotal: "100", gst: "0", total: "100", outstanding: "0", paid_date: "2025-02-28"}}]
+  problems: [{row: 2, field: paid_date, message: paid date is before issue date}]
+- name: due_date_may_be_future
+  rows: [{num: 2, values: {number: A, customer: Acme, issue_date: "2025-05-30", due_date: "2025-06-30", subtotal: "100", gst: "0", total: "100", outstanding: "100"}}]
+  want: [{row: 2, number: A, customer: Acme, issue_date: "2025-05-30", due_date: "2025-06-30", subtotal: 10000, gst: 0, total: 10000, outstanding: 10000}]

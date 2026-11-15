@@ -135,8 +135,8 @@ func ParseEntryRows(rows []importers.Row, dateFormat string, today time.Time) ([
 func ImportEntries(ctx context.Context, q core.Querier, orgID int64, actor *int64, rows []EntryRow, apply bool) (EntryImportResult, error) {
 	res := EntryImportResult{Problems: []importers.Problem{}}
 	type pending struct {
-		row                  EntryRow
-		taskID, userID, line int64
+		row                              EntryRow
+		taskID, userID, line, existingID int64
 	}
 	var toCreate []pending
 	lk := lookups{q: q, orgID: orgID,
@@ -146,11 +146,19 @@ func ImportEntries(ctx context.Context, q core.Querier, orgID int64, actor *int6
 		problem := func(field, msg string) {
 			res.Problems = append(res.Problems, importers.Problem{Row: row.Row, Field: field, Message: msg})
 		}
-		var exists bool
-		if err := q.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM time_entries WHERE org_id = $1 AND external_ref = $2)`, orgID, row.Ref).Scan(&exists); err != nil {
+		// An entry already imported is skipped while it is billed. One whose
+		// invoice was voided since (Void unlinks its time) is linked again
+		// to the row's invoice, so a corrected invoice re-import followed by
+		// the same time file restores it without duplicating it.
+		var existingID int64
+		var existingLine *int64
+		err := q.QueryRow(ctx, `SELECT id, invoice_line_id FROM time_entries WHERE org_id = $1 AND external_ref = $2`, orgID, row.Ref).Scan(&existingID, &existingLine)
+		switch {
+		case errors.Is(err, pgx.ErrNoRows):
+			existingID = 0
+		case err != nil:
 			return EntryImportResult{}, err
-		}
-		if exists {
+		case existingLine != nil:
 			res.Existing++
 			continue
 		}
@@ -211,13 +219,24 @@ func ImportEntries(ctx context.Context, q core.Querier, orgID int64, actor *int6
 		}
 		res.New++
 		res.TotalMinutes += row.Minutes
-		toCreate = append(toCreate, pending{row: row, taskID: taskID, userID: users[0], line: line.ids[0]})
+		toCreate = append(toCreate, pending{row: row, taskID: taskID, userID: users[0], line: line.ids[0], existingID: existingID})
 	}
 
 	if !apply || len(res.Problems) > 0 {
 		return res, nil
 	}
 	for _, p := range toCreate {
+		if p.existingID != 0 {
+			if _, err := q.Exec(ctx, `UPDATE time_entries SET invoice_line_id = $1 WHERE org_id = $2 AND id = $3`, p.line, orgID, p.existingID); err != nil {
+				return EntryImportResult{}, err
+			}
+			if err := core.Audit(ctx, q, orgID, actor, "time_entry", p.existingID, "import_relink", map[string]any{
+				"external_ref": p.row.Ref, "invoice": p.row.Invoice,
+			}); err != nil {
+				return EntryImportResult{}, err
+			}
+			continue
+		}
 		var id int64
 		if err := q.QueryRow(ctx, `
 			INSERT INTO time_entries (org_id, task_id, user_id, work_date, minutes, note, invoice_line_id, external_ref)

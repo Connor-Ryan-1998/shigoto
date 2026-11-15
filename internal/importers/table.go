@@ -8,8 +8,9 @@ import (
 	"strings"
 )
 
-// Problem is one import problem. Row is the 1-based file row (the header
-// is row 1), or 0 for a problem with the whole file or its mapping. Field
+// Problem is one import problem. Row is the 1-based file line the CSV row
+// starts on (the header is line 1), or 0 for a problem with the whole file
+// or its mapping. Field
 // is the import field key the problem concerns, when there is one.
 type Problem struct {
 	Row     int    `json:"row"`
@@ -31,7 +32,7 @@ type Mapping struct {
 	DateFormat string            `json:"date_format"`
 }
 
-// Row is one non-blank data row: its 1-based file row number and the
+// Row is one non-blank data row: the 1-based file line it starts on and the
 // trimmed cell for each mapped field (absent when the field is unmapped,
 // "" when the row is shorter than the header).
 type Row struct {
@@ -52,9 +53,22 @@ func ReadTable(r io.Reader, m Mapping, fields []Field) ([]Row, []Problem) {
 	cr := csv.NewReader(stripBOM(r))
 	cr.FieldsPerRecord = -1
 	cr.TrimLeadingSpace = true
-	records, err := cr.ReadAll()
-	if err != nil {
-		return nil, []Problem{{Message: "file is not valid CSV"}}
+	// Each record's Row is the file line it starts on (what a spreadsheet
+	// or editor shows), not its record index: encoding/csv skips empty
+	// lines and a quoted cell may span several.
+	var records [][]string
+	var lines []int
+	for {
+		rec, err := cr.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, []Problem{{Message: "file is not valid CSV"}}
+		}
+		line, _ := cr.FieldPos(0)
+		records = append(records, rec)
+		lines = append(lines, line)
 	}
 	if len(records) == 0 {
 		return nil, []Problem{{Message: "file has no header row"}}
@@ -122,7 +136,7 @@ func ReadTable(r io.Reader, m Mapping, fields []Field) ([]Row, []Problem) {
 				values[key] = ""
 			}
 		}
-		rows = append(rows, Row{Num: i + 2, Values: values})
+		rows = append(rows, Row{Num: lines[i+1], Values: values})
 	}
 	return rows, nil
 }

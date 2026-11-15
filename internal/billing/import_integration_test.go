@@ -222,3 +222,35 @@ func assertProblems(t *testing.T, got, want []importers.Problem) {
 		}
 	}
 }
+
+// A voided imported invoice frees its number for a corrected re-import.
+func TestInvoiceImportAfterVoid(t *testing.T) {
+	e, org, _ := importSetup(t)
+	row := importRow(2, "A", "2025-03-01")
+	if _, err := billing.ImportInvoices(e.Ctx, e.Pool, org.ID, nil, []billing.InvoiceRow{row}, true); err != nil {
+		t.Fatal(err)
+	}
+	var id int64
+	if err := e.Pool.QueryRow(e.Ctx, `SELECT id FROM invoices WHERE org_id = $1 AND external_ref = 'import:A'`, org.ID).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.BillingService().Void(e.Ctx, org.ID, "acme", id); err != nil {
+		t.Fatalf("Void: %v", err)
+	}
+
+	corrected := row
+	corrected.Subtotal, corrected.GST, corrected.Total, corrected.Outstanding = 2000, 200, 2200, 2200
+	res, err := billing.ImportInvoices(e.Ctx, e.Pool, org.ID, nil, []billing.InvoiceRow{corrected}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.New != 1 || len(res.Problems) != 0 {
+		t.Fatalf("re-import after void = %+v, want 1 new", res)
+	}
+	if n := e.Count("invoices", "org_id = $1 AND external_ref = 'import:A' AND status = 'open' AND total = 2200", org.ID); n != 1 {
+		t.Errorf("corrected invoice rows = %d, want 1", n)
+	}
+	if n := e.Count("invoices", "id = $1 AND status = 'void' AND external_ref LIKE 'voided:%'", id); n != 1 {
+		t.Errorf("voided invoice keeps a voided: reference = %d, want 1", n)
+	}
+}

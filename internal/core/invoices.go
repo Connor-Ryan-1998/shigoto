@@ -560,7 +560,13 @@ func VoidInvoice(ctx context.Context, tx Querier, orgID, id int64) (Invoice, err
 		return Invoice{}, ErrInvoiceHasPayments
 	}
 
-	if _, err := tx.Exec(ctx, `UPDATE invoices SET status = 'void' WHERE org_id = $1 AND id = $2`, orgID, id); err != nil {
+	// An imported invoice's reference moves aside ("voided:<id>:import:..."),
+	// so a corrected re-import can reuse it and time is no longer matched
+	// to the void invoice.
+	if _, err := tx.Exec(ctx, `
+		UPDATE invoices SET status = 'void',
+			external_ref = CASE WHEN external_ref IS NULL THEN NULL ELSE 'voided:' || id || ':' || external_ref END
+		WHERE org_id = $1 AND id = $2`, orgID, id); err != nil {
 		return Invoice{}, err
 	}
 	return GetInvoice(ctx, tx, orgID, id)

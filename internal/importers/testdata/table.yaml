@@ -63,3 +63,13 @@
   mapping: {columns: {x: A}, date_format: "2006-01-02"}
   fields: [{key: x, required: true}]
   problems: [{row: 0, message: "file is not valid CSV"}]
+- name: row_numbers_follow_file_lines_past_blank_lines
+  csv: "A\n1\n\n2\n"
+  mapping: {columns: {x: A}, date_format: "2006-01-02"}
+  fields: [{key: x, required: true}]
+  rows: [{num: 2, values: {x: "1"}}, {num: 4, values: {x: "2"}}]
+- name: row_numbers_follow_file_lines_past_quoted_newlines
+  csv: "A\n\"x\ny\"\n2\n"
+  mapping: {columns: {x: A}, date_format: "2006-01-02"}
+  fields: [{key: x, required: true}]
+  rows: [{num: 2, values: {x: "x\ny"}}, {num: 4, values: {x: "2"}}]
