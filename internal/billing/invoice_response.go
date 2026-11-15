@@ -42,6 +42,7 @@ type InvoiceResponse struct {
 	AmountPaid       int64          `json:"amount_paid"`
 	Outstanding      int64          `json:"outstanding"`
 	PaymentReference string         `json:"payment_reference"`
+	ExternalRef      string         `json:"external_ref"`
 	PayOptions       []string       `json:"pay_options"`
 	Lines            []LineResponse `json:"lines"`
 }
@@ -92,7 +93,7 @@ func (s *Service) InvoiceJSON(ctx context.Context, q core.Querier, inv core.Invo
 		ID: inv.ID, ContactID: inv.ContactID, ContactName: contact.Name, Number: inv.Number, Source: inv.Source, Status: inv.Status, WrittenOff: inv.WrittenOff,
 		Currency: inv.Currency, Subtotal: int64(inv.Subtotal), GSTTotal: int64(inv.GSTTotal), Total: int64(inv.Total),
 		AmountPaid: paid, Outstanding: outstanding,
-		PaymentReference: inv.PaymentReference, PayOptions: InvoicePayOptions(inv, opts), Lines: make([]LineResponse, len(inv.Lines)),
+		PaymentReference: inv.PaymentReference, ExternalRef: inv.ExternalRef, PayOptions: InvoicePayOptions(inv, opts), Lines: make([]LineResponse, len(inv.Lines)),
 	}
 	if inv.IssueDate != nil {
 		s := inv.IssueDate.Format(dateLayout)

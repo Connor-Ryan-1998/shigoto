@@ -117,12 +117,15 @@ type Invoice struct {
 	// uncollectible, so a later payment reversal restores 'uncollectible'
 	// rather than reinstating the debt as 'open'.
 	WrittenOff bool
-	Lines      []InvoiceLine
+	// ExternalRef identifies an imported invoice ("import:<number>");
+	// empty for invoices created in Shigoto.
+	ExternalRef string
+	Lines       []InvoiceLine
 }
 
 const invoiceColumns = `id, org_id, contact_id, number, source, status, issue_date, due_date,
 	due_in_days, due_on, currency, subtotal, gst_total, total, payment_reference,
-	coalesce(provider_ref,''), coalesce(provider_url,''), written_off`
+	coalesce(provider_ref,''), coalesce(provider_url,''), written_off, coalesce(external_ref,'')`
 
 func scanInvoice(row pgx.Row) (Invoice, error) {
 	var inv Invoice
@@ -130,7 +133,7 @@ func scanInvoice(row pgx.Row) (Invoice, error) {
 	var subtotal, gstTotal, total int64
 	err := row.Scan(&inv.ID, &inv.OrgID, &inv.ContactID, &number, &inv.Source, &inv.Status,
 		&inv.IssueDate, &inv.DueDate, &inv.DueInDays, &inv.DueOn, &inv.Currency, &subtotal, &gstTotal, &total,
-		&inv.PaymentReference, &inv.ProviderRef, &inv.ProviderURL, &inv.WrittenOff)
+		&inv.PaymentReference, &inv.ProviderRef, &inv.ProviderURL, &inv.WrittenOff, &inv.ExternalRef)
 	if err != nil {
 		return Invoice{}, err
 	}

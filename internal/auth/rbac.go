@@ -35,6 +35,9 @@ const (
 	// PermTimesheetsAdmin covers editing anyone's time entries and
 	// writing projects/tasks; owner only.
 	PermTimesheetsAdmin Perm = "timesheets_admin"
+	// PermImport covers bulk CSV import of invoices and time entries;
+	// owner only.
+	PermImport Perm = "import"
 )
 
 // rolePerms is the single source of truth for Can. Owner holds every
@@ -53,6 +56,7 @@ var rolePerms = map[Role]map[Perm]bool{
 		PermTimesheetsWrite: true,
 		PermTimesheetsRead:  true,
 		PermTimesheetsAdmin: true,
+		PermImport:          true,
 	},
 	Staff: {
 		PermContactsWrite:   true,

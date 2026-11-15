@@ -14,6 +14,7 @@ func TestCanMatrix(t *testing.T) {
 		PermTimesheetsWrite,
 		PermTimesheetsRead,
 		PermTimesheetsAdmin,
+		PermImport,
 	}
 
 	staffPerms := map[Perm]bool{

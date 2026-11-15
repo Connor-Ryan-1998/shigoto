@@ -212,3 +212,38 @@ func TestInvoiceJSONOutstandingOnlyForOpen(t *testing.T) {
 		t.Errorf("open partly-paid outstanding = %d, want 1800", got)
 	}
 }
+
+// TestInvoiceJSONExternalRef: an imported invoice's external_ref reaches the
+// API response; a normal invoice's is empty.
+func TestInvoiceJSONExternalRef(t *testing.T) {
+	e := testkit.New(t)
+	pool, ctx := e.Pool, e.Ctx
+	org := e.Org("acme")
+	contactID := e.Contact(org, testkit.Kind("client"), testkit.Name("Client")).ID
+	svc := e.BillingService()
+
+	plainID := e.Invoice(org, contactID, testkit.Source("manual"), testkit.Amount(1000)).ID
+	importedID := e.Invoice(org, contactID, testkit.Source("manual"), testkit.Amount(1000)).ID
+	if _, err := pool.Exec(ctx, `UPDATE invoices SET external_ref = 'import:ACC-SINV-1' WHERE id = $1`, importedID); err != nil {
+		t.Fatalf("set external_ref: %v", err)
+	}
+
+	ref := func(id int64) string {
+		t.Helper()
+		inv, err := core.GetInvoice(ctx, pool, org.ID, id)
+		if err != nil {
+			t.Fatalf("GetInvoice: %v", err)
+		}
+		resp, err := svc.InvoiceJSON(ctx, pool, inv)
+		if err != nil {
+			t.Fatalf("InvoiceJSON: %v", err)
+		}
+		return resp.ExternalRef
+	}
+	if got := ref(plainID); got != "" {
+		t.Errorf("plain external_ref = %q, want empty", got)
+	}
+	if got := ref(importedID); got != "import:ACC-SINV-1" {
+		t.Errorf("imported external_ref = %q, want import:ACC-SINV-1", got)
+	}
+}
