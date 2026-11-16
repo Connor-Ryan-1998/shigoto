@@ -30,6 +30,11 @@ function luminance(channels: number[]): number {
 	return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
+function mix(fg: string, bg: string, alpha: number): string {
+	const back = rgb(bg);
+	return '#' + rgb(fg).map((c, i) => Math.round(c * alpha + back[i] * (1 - alpha)).toString(16).padStart(2, '0')).join('');
+}
+
 // WCAG 2.x contrast; alpha < 1 blends the foreground over the background
 // first, matching Tailwind's text-base-content/70 opacity modifier.
 function contrast(fg: string, bg: string, alpha = 1): number {
@@ -53,13 +58,16 @@ describe('warm-sage themes', () => {
 
 	it.each(['shigoto-light', 'shigoto-dark'])('%s keeps readable text', (name) => {
 		const t = themeTokens(name);
-		for (const bg of [t['--color-base-100'], t['--color-base-200']]) {
+		for (const bg of [t['--color-base-100'], t['--color-base-200'], t['--color-sidebar']]) {
 			expect(contrast(t['--color-base-content'], bg)).toBeGreaterThanOrEqual(4.5);
 			expect(contrast(t['--color-base-content'], bg, 0.7)).toBeGreaterThanOrEqual(4.5);
 		}
 		expect(contrast(t['--color-primary-content'], t['--color-primary'])).toBeGreaterThanOrEqual(4.5);
 		expect(contrast(t['--color-primary'], t['--color-base-100'])).toBeGreaterThanOrEqual(4.5);
 		expect(contrast(t['--color-warning-content'], t['--color-warning'])).toBeGreaterThanOrEqual(4.5);
+		// Soft badges/alerts draw the tone colour over an ~8% tint of it.
+		const softWarning = mix(t['--color-warning'], t['--color-base-100'], 0.08);
+		expect(contrast(t['--color-warning'], softWarning)).toBeGreaterThanOrEqual(4.5);
 		expect(contrast(t['--color-error-content'], t['--color-error'])).toBeGreaterThanOrEqual(4.5);
 	});
 

@@ -60,4 +60,10 @@ describe('portal layout', () => {
 		expect(screen.getByRole('button', { name: /^Theme: / })).toBeTruthy();
 		expect(screen.queryByRole('button', { name: 'Logout' })).toBeNull();
 	});
+
+	it('marks the current section by weight, not colour alone', () => {
+		session.setMe(meWithOrgs([{ slug: 'acme', name: 'Acme', role: 'tenant', portal: true }]));
+		render(Layout, { children: childSnippet() });
+		expect(screen.getByRole('link', { name: 'Invoices' }).classList.contains('font-semibold')).toBe(true);
+	});
 });

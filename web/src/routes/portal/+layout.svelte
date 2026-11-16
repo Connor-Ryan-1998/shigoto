@@ -50,9 +50,9 @@
 		<span class="hidden pr-2 text-lg font-semibold tracking-tight min-[375px]:inline">{currentOrg?.name ?? 'Portal'}</span>
 		{#if org}
 			<nav aria-label="Portal" class="flex gap-1">
-				<a class={['btn btn-ghost btn-sm', page.url.pathname.startsWith(`/portal/${org}/invoices`) && 'bg-primary/12 text-primary']} href={`/portal/${org}/invoices`} aria-current={page.url.pathname.startsWith(`/portal/${org}/invoices`) ? 'page' : undefined}>Invoices</a>
+				<a class={['btn btn-ghost btn-sm', page.url.pathname.startsWith(`/portal/${org}/invoices`) && 'bg-primary/12 font-semibold text-primary']} href={`/portal/${org}/invoices`} aria-current={page.url.pathname.startsWith(`/portal/${org}/invoices`) ? 'page' : undefined}>Invoices</a>
 				{#if currentOrg?.role === 'tenant'}
-					<a class={['btn btn-ghost btn-sm', page.url.pathname.startsWith(`/portal/${org}/leases`) && 'bg-primary/12 text-primary']} href={`/portal/${org}/leases`} aria-current={page.url.pathname.startsWith(`/portal/${org}/leases`) ? 'page' : undefined}>Leases</a>
+					<a class={['btn btn-ghost btn-sm', page.url.pathname.startsWith(`/portal/${org}/leases`) && 'bg-primary/12 font-semibold text-primary']} href={`/portal/${org}/leases`} aria-current={page.url.pathname.startsWith(`/portal/${org}/leases`) ? 'page' : undefined}>Leases</a>
 				{/if}
 			</nav>
 		{/if}
