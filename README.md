@@ -149,7 +149,7 @@ when `index.html` is missing.
 After the existing verification and audit jobs pass, CI builds linux/amd64 and
 linux/arm64 images. Non-PR `main` builds publish
 `ghcr.io/connor-ryan-1998/shigoto:sha-<full-commit>` and `:latest`; PRs only build.
-The source repository remains `Connor-Ryan-1998/shigato` (spelling intentional).
+The source repository remains `Connor-Ryan-1998/shigoto` (spelling intentional).
 Make the GHCR package public or provide protected read-only pull credentials on
 the deployment host. Never bypass a failing audit to publish a release.
 
