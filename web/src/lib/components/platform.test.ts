@@ -6,6 +6,7 @@ import PageHeader from './PageHeader.svelte';
 import DataTable from './DataTable.svelte';
 import Toast from './Toast.svelte';
 import Field from './Field.svelte';
+import EmptyState from './EmptyState.svelte';
 
 const text = createRawSnippet(() => ({ render: () => '<span>Save</span>' }));
 
@@ -42,5 +43,10 @@ describe('platform contracts', () => {
 	it('announces errors as alerts', () => {
 		render(Toast, { message: 'Save failed', tone: 'danger' });
 		expect(screen.getByRole('alert').textContent).toContain('Save failed');
+	});
+	it('shows a decorative empty-state icon', () => {
+		const { container } = render(EmptyState, { title: 'No invoices yet', icon: 'inbox' });
+		expect(container.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
+		expect(screen.getByText('No invoices yet')).toBeTruthy();
 	});
 });

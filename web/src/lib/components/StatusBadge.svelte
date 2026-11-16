@@ -12,7 +12,7 @@
 
 <span
 	class={[
-		'badge badge-soft font-semibold',
+		'badge badge-soft rounded-field font-medium',
 		{ success: 'badge-success', warning: 'badge-warning', danger: 'badge-error', info: 'badge-info' }[tone]
 	]}
 >

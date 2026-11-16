@@ -18,7 +18,7 @@
 	let { data, org }: { data: ReconciliationDashboard; org: string } = $props();
 </script>
 
-<a class="card card-border bg-base-100 p-4 shadow-sm hover:bg-base-200" href={`/${org}/reconciliation`}>
+<a class="card bg-base-100 p-5 shadow-sm transition-colors hover:bg-base-200/60" href={`/${org}/reconciliation`}>
 	<h2 class="mb-3 text-lg font-bold">Reconciliation</h2>
 	<dl class="m-0">
 		<div class="flex justify-between gap-4 border-t border-base-300 py-2 first:border-t-0">

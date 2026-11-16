@@ -15,7 +15,7 @@
 	let { data }: { data: PropertyDashboard } = $props();
 </script>
 
-<section class="card card-border bg-base-100 p-4 shadow-sm">
+<section class="card bg-base-100 p-5 shadow-sm">
 	<h2 class="mb-3 text-lg font-bold">Property</h2>
 	<dl class="m-0">
 		<div class="flex justify-between gap-4 border-t border-base-300 py-2 first:border-t-0">

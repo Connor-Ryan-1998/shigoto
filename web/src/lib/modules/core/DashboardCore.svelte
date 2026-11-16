@@ -24,7 +24,7 @@
 </script>
 
 <div class="mb-6 grid grid-cols-[repeat(auto-fit,minmax(14rem,1fr))] gap-4">
-	<a class="card card-border bg-base-100 p-4 shadow-sm hover:bg-base-200" href={`/${org}/invoices?status=open`}>
+	<a class="card bg-base-100 p-5 shadow-sm transition-colors hover:bg-base-200/60" href={`/${org}/invoices?status=open`}>
 		<p class="m-0 mb-2 text-sm font-semibold text-base-content/70">Open invoices</p>
 		<p class="m-0 text-3xl font-bold">{core.open_count}</p>
 		<p class="m-0 mt-1 text-sm text-base-content/70"><Money cents={core.open_outstanding} /> outstanding</p>
@@ -32,13 +32,13 @@
 
 	<!-- Styled as a warning, but "Overdue" is also shown as text, so the
 	     status never depends on colour alone. -->
-	<a class="card card-border bg-base-100 p-4 shadow-sm border-warning hover:bg-base-200" href={`/${org}/invoices?status=overdue`}>
+	<a class="card border-l-4 border-warning bg-base-100 p-5 shadow-sm transition-colors hover:bg-base-200/60" href={`/${org}/invoices?status=overdue`}>
 		<p class="m-0 mb-2 text-sm font-semibold text-warning">Overdue</p>
 		<p class="m-0 text-3xl font-bold">{core.overdue_count}</p>
 		<p class="m-0 mt-1 text-sm text-base-content/70"><Money cents={core.overdue_outstanding} /> outstanding</p>
 	</a>
 
-	<div class="card card-border bg-base-100 p-4 shadow-sm">
+	<div class="card bg-base-100 p-5 shadow-sm">
 		<p class="m-0 mb-2 text-sm font-semibold text-base-content/70">Drafts</p>
 		<p class="m-0 text-3xl font-bold">{core.draft_count}</p>
 	</div>

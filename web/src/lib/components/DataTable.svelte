@@ -21,11 +21,11 @@
 	} = $props();
 </script>
 
-<div class="overflow-x-auto rounded-box border border-base-300 bg-base-100">
+<div class="overflow-x-auto rounded-box bg-base-100 shadow-sm">
 <table class="table">
 	{#if caption}<caption class="sr-only">{caption}</caption>{/if}
 	<thead>
-		<tr>
+		<tr class="bg-base-200/60 text-base-content/70">
 			{#each columns as col (col.key)}
 				<th scope="col" class:text-right={col.align === 'right'}>{col.label}</th>
 			{/each}
