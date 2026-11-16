@@ -6,11 +6,11 @@ export const core: ModuleManifest = {
 	name: 'core',
 	label: 'Core',
 	nav: [
-		{ href: '', label: 'Dashboard', perm: '', group: 'overview' },
-		{ href: 'contacts', label: 'Contacts', perm: 'invoices_read', group: 'overview' },
-		{ href: 'invoices', label: 'Invoices', perm: 'invoices_read', group: 'finance' },
-		{ href: 'reports', label: 'Reports', perm: 'reports_read', group: 'finance' },
-		{ href: 'settings', label: 'Settings', perm: 'org_admin', group: 'admin' },
-		{ href: 'settings/members', label: 'Members', perm: 'org_admin', group: 'admin' }
+		{ href: '', label: 'Dashboard', perm: '', group: 'overview', icon: 'dashboard' },
+		{ href: 'contacts', label: 'Contacts', perm: 'invoices_read', group: 'overview', icon: 'contacts' },
+		{ href: 'invoices', label: 'Invoices', perm: 'invoices_read', group: 'finance', icon: 'invoices' },
+		{ href: 'reports', label: 'Reports', perm: 'reports_read', group: 'finance', icon: 'reports' },
+		{ href: 'settings', label: 'Settings', perm: 'org_admin', group: 'admin', icon: 'settings' },
+		{ href: 'settings/members', label: 'Members', perm: 'org_admin', group: 'admin', icon: 'members' }
 	]
 };

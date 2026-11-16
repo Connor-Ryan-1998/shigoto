@@ -47,6 +47,7 @@ Paths below are relative to `web/src/lib/components/`.
 | `FormActions.svelte` | Submit and optional Cancel within a form; `busy`, `submitLabel`, `busyLabel`, `oncancel`. |
 | `Toast.svelte` | Existing inline feedback component despite its historical name. Danger announces an alert; other tones announce status. Place feedback in the active surface, not behind a modal. |
 | `StatusBadge.svelte` | Status text plus a domain-supplied tone. Color alone never conveys meaning. |
+| `Icon.svelte` | `name`, optional `size`, optional `label`. Decorative (`aria-hidden`) unless labelled. Inline SVG; do not add an icon library. |
 | `Money.svelte`, `DateText.svelte` | Shared display formatting. Use `lib/format.ts` when formatting inside prose or table snippets. |
 
 Prefer normal HTML links for navigation, including links styled as buttons.

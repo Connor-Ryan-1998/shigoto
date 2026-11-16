@@ -1,4 +1,5 @@
 import type { Component } from 'svelte';
+import type { IconName } from '../components/Icon.svelte';
 
 export type ModuleName = 'core' | 'property' | 'timesheets' | 'reconciliation';
 
@@ -23,6 +24,8 @@ export type NavItem = {
 	// staff member may see this item regardless of perms.
 	perm: string;
 	group: NavGroup;
+	// Decorative sidebar icon; the label alone still names the link.
+	icon?: IconName;
 };
 
 export type ModuleManifest = {
