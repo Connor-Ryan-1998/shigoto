@@ -1,6 +1,84 @@
 @import 'tailwindcss';
+@import '@fontsource-variable/source-sans-3';
+
+/* Built-in daisyUI themes are off; Shigoto ships its own warm-sage pair.
+   Colours are 6-digit hex so lib/theme.test.ts can check their contrast. */
 @plugin 'daisyui' {
-	themes:
-		corporate --default,
-		business --prefersdark;
+	themes: false;
+}
+
+@plugin 'daisyui/theme' {
+	name: 'shigoto-light';
+	default: true;
+	prefersdark: false;
+	color-scheme: light;
+	--color-base-100: #fffefb;
+	--color-base-200: #f7f6f2;
+	--color-base-300: #e4e5dc;
+	--color-base-content: #303930;
+	--color-primary: #42634d;
+	--color-primary-content: #fffefb;
+	--color-secondary: #5e6b57;
+	--color-secondary-content: #fffefb;
+	--color-accent: #3f6a72;
+	--color-accent-content: #fffefb;
+	--color-neutral: #3a423b;
+	--color-neutral-content: #f7f6f2;
+	--color-info: #3d6f8c;
+	--color-info-content: #fffefb;
+	--color-success: #3f7a52;
+	--color-success-content: #fffefb;
+	--color-warning: #9a6412;
+	--color-warning-content: #fffefb;
+	--color-error: #b4412f;
+	--color-error-content: #fffefb;
+	--color-sidebar: #efeee7;
+	--radius-selector: 0.5rem;
+	--radius-field: 0.5rem;
+	--radius-box: 0.75rem;
+	--size-selector: 0.25rem;
+	--size-field: 0.25rem;
+	--border: 1px;
+	--depth: 0;
+	--noise: 0;
+}
+
+@plugin 'daisyui/theme' {
+	name: 'shigoto-dark';
+	default: false;
+	prefersdark: true;
+	color-scheme: dark;
+	--color-base-100: #2b332d;
+	--color-base-200: #202622;
+	--color-base-300: #414c42;
+	--color-base-content: #e7ece5;
+	--color-primary: #b1d0ac;
+	--color-primary-content: #202622;
+	--color-secondary: #c9c6ad;
+	--color-secondary-content: #202622;
+	--color-accent: #a9c9cf;
+	--color-accent-content: #202622;
+	--color-neutral: #3a443c;
+	--color-neutral-content: #e7ece5;
+	--color-info: #9cc5dd;
+	--color-info-content: #202622;
+	--color-success: #9fd1a8;
+	--color-success-content: #202622;
+	--color-warning: #f1ce8d;
+	--color-warning-content: #202622;
+	--color-error: #f0a08f;
+	--color-error-content: #202622;
+	--color-sidebar: #252d26;
+	--radius-selector: 0.5rem;
+	--radius-field: 0.5rem;
+	--radius-box: 0.75rem;
+	--size-selector: 0.25rem;
+	--size-field: 0.25rem;
+	--border: 1px;
+	--depth: 0;
+	--noise: 0;
+}
+
+@theme {
+	--font-sans: 'Source Sans 3 Variable', ui-sans-serif, system-ui, sans-serif;
 }

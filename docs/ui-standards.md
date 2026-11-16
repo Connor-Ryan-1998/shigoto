@@ -153,7 +153,9 @@ Keep leading zeros in bank details and preserve optional-field clearing behavior
   overflow horizontally at narrow widths.
 - Wrap headers/actions/filters; use full-width controls inside constrained forms.
 - Use existing semantic DaisyUI theme classes (`base-*`, `primary`, `error`,
-  `warning`, `success`), not hard-coded light-only colors. Keep corporate/business themes.
+  `warning`, `success`), not hard-coded light-only colors. Use the
+  `shigoto-light`/`shigoto-dark` themes in `app.css`; the font is bundled,
+  never loaded remotely.
 - Prefer shared components and scoped classes to global selectors targeting all
   forms, tables, inputs, or buttons.
 

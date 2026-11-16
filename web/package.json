@@ -11,6 +11,7 @@
     "test": "vitest"
   },
   "devDependencies": {
+    "@fontsource-variable/source-sans-3": "5.3.1",
     "@playwright/test": "1.65.0",
     "@sveltejs/adapter-static": "4.0.1",
     "@sveltejs/kit": "3.1.1",
