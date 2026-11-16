@@ -52,4 +52,12 @@ describe('portal layout', () => {
 
 		expect(screen.queryByRole('link', { name: /Back to/ })).toBeNull();
 	});
+
+	it('offers Sign out and a labelled theme toggle', () => {
+		session.setMe(meWithOrgs([{ slug: 'acme', name: 'Acme', role: 'tenant', portal: true }]));
+		render(Layout, { children: childSnippet() });
+		expect(screen.getByRole('button', { name: 'Sign out' })).toBeTruthy();
+		expect(screen.getByRole('button', { name: /^Theme: / })).toBeTruthy();
+		expect(screen.queryByRole('button', { name: 'Logout' })).toBeNull();
+	});
 });

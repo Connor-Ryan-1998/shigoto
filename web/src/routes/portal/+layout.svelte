@@ -4,6 +4,7 @@
 	import { session } from '../../lib/session.svelte';
 	import { theme } from '../../lib/theme.svelte';
 	import { api } from '../../lib/api';
+	import Icon from '../../lib/components/Icon.svelte';
 
 	// The portal's own minimal shell - no staff nav, no org switcher, no
 	// module registry: it only ever shows a tenant/client their own org's
@@ -21,6 +22,10 @@
 	// shell first. !o.portal is a staff org (the API omits `portal` for
 	// owner/staff/bookkeeper memberships).
 	const staffOrg = $derived(session.me?.orgs.find((o) => !o.portal) ?? null);
+
+	const themeIcon = $derived(
+		theme.current === 'system' ? 'auto' : theme.current === 'light' ? 'sun' : 'moon'
+	);
 
 	const themeLabel = $derived(
 		theme.current === 'system' ? 'Auto' : theme.current === 'light' ? 'Light' : 'Dark'
@@ -41,13 +46,13 @@
 
 <a href="#main-content" class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-box focus:bg-base-100 focus:p-2">Skip to content</a>
 <div class="flex min-h-screen flex-col bg-base-200">
-	<header class="navbar flex-wrap gap-2 border-b border-base-300 bg-base-100 px-4">
-		<span class="hidden font-semibold min-[375px]:inline">{currentOrg?.name ?? 'Portal'}</span>
+	<header class="navbar flex-wrap gap-2 px-4 md:px-6">
+		<span class="hidden pr-2 text-lg font-semibold tracking-tight min-[375px]:inline">{currentOrg?.name ?? 'Portal'}</span>
 		{#if org}
 			<nav aria-label="Portal" class="flex gap-1">
-				<a class="btn btn-ghost btn-sm" href={`/portal/${org}/invoices`} aria-current={page.url.pathname.startsWith(`/portal/${org}/invoices`) ? 'page' : undefined}>Invoices</a>
+				<a class={['btn btn-ghost btn-sm', page.url.pathname.startsWith(`/portal/${org}/invoices`) && 'bg-primary/12 text-primary']} href={`/portal/${org}/invoices`} aria-current={page.url.pathname.startsWith(`/portal/${org}/invoices`) ? 'page' : undefined}>Invoices</a>
 				{#if currentOrg?.role === 'tenant'}
-					<a class="btn btn-ghost btn-sm" href={`/portal/${org}/leases`} aria-current={page.url.pathname.startsWith(`/portal/${org}/leases`) ? 'page' : undefined}>Leases</a>
+					<a class={['btn btn-ghost btn-sm', page.url.pathname.startsWith(`/portal/${org}/leases`) && 'bg-primary/12 text-primary']} href={`/portal/${org}/leases`} aria-current={page.url.pathname.startsWith(`/portal/${org}/leases`) ? 'page' : undefined}>Leases</a>
 				{/if}
 			</nav>
 		{/if}
@@ -57,17 +62,18 @@
 			{/if}
 			<button
 				type="button"
-				class="btn btn-ghost btn-sm"
+				class="btn btn-ghost btn-sm btn-square"
 				onclick={() => theme.cycle()}
 				aria-label={`Theme: ${themeLabel} (click to change)`}
+				title={`Theme: ${themeLabel}`}
 			>
-				{themeLabel}
+				<Icon name={themeIcon} />
 			</button>
-			<button type="button" class="btn btn-outline btn-sm" onclick={logout}>Logout</button>
+			<button type="button" class="btn btn-ghost btn-sm" onclick={logout}><Icon name="sign-out" />Sign out</button>
 		</div>
 	</header>
 
-	<main id="main-content" class="min-w-0 flex-1 p-4 md:p-6">
+	<main id="main-content" class="min-w-0 flex-1 p-4 md:p-8">
 		{#key org}
 			{@render children()}
 		{/key}
