@@ -83,7 +83,7 @@
 	aria-label={label}
 	class={[
 		'fixed m-0 h-full max-h-full overflow-y-auto bg-base-100 p-4 text-base-content backdrop:bg-black/50',
-		side === 'left' ? 'inset-y-0 left-0 right-auto border-r border-base-300' : 'inset-y-0 right-0 left-auto border-l border-base-300'
+		side === 'left' ? 'inset-y-0 left-0 right-auto' : 'inset-y-0 right-0 left-auto'
 	]}
 	style:width="min({width}, 90vw)"
 >

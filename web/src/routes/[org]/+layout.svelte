@@ -10,6 +10,7 @@
 	import { reconciliation } from '../../lib/modules/reconciliation/manifest';
 	import { api } from '../../lib/api';
 	import Drawer from '../../lib/components/Drawer.svelte';
+	import Icon from '../../lib/components/Icon.svelte';
 
 	let { children } = $props();
 
@@ -28,6 +29,10 @@
 		page.url.pathname;
 		drawerOpen = false;
 	});
+
+	const themeIcon = $derived(
+		theme.current === 'system' ? 'auto' : theme.current === 'light' ? 'sun' : 'moon'
+	);
 
 	const themeLabel = $derived(
 		theme.current === 'system' ? 'Auto' : theme.current === 'light' ? 'Light' : 'Dark'
@@ -59,22 +64,26 @@
 
 {#snippet navList()}
 	{#each nav as group (group.id)}
-		<ul class="menu w-full">
-			<li>
-				<details open>
-					<summary class="font-semibold">{group.label}</summary>
-					<ul>
-						{#each group.items as item (item.href)}
-							<li>
-								<a href={`/${page.params.org}/${item.href}`} aria-current={activeHref === `/${page.params.org}/${item.href}`.replace(/\/$/, '') ? 'page' : undefined} class:menu-active={activeHref === `/${page.params.org}/${item.href}`.replace(/\/$/, '')} onclick={() => (drawerOpen = false)}
-									>{item.label}</a
-								>
-							</li>
-						{/each}
-					</ul>
-				</details>
-			</li>
-		</ul>
+		<div class="mb-4">
+			<p class="m-0 mb-1 px-3 text-xs font-semibold tracking-wider text-base-content/70 uppercase">{group.label}</p>
+			<ul class="menu w-full gap-0.5 p-0">
+				{#each group.items as item (item.href)}
+					{@const href = `/${page.params.org}/${item.href}`}
+					{@const active = activeHref === href.replace(/\/$/, '')}
+					<li>
+						<a
+							{href}
+							aria-current={active ? 'page' : undefined}
+							class={['gap-3 rounded-field py-2', active ? 'menu-active bg-primary/12 font-semibold text-primary' : 'text-base-content/80']}
+							onclick={() => (drawerOpen = false)}
+						>
+							{#if item.icon}<Icon name={item.icon} />{/if}
+							{item.label}
+						</a>
+					</li>
+				{/each}
+			</ul>
+		</div>
 	{/each}
 {/snippet}
 
@@ -84,20 +93,22 @@
 >Skip to content</a>
 
 <div class="grid min-h-screen grid-cols-1 grid-rows-[auto_1fr] bg-base-200 md:grid-cols-[16rem_1fr] print:block print:bg-white">
-	<header class="navbar col-span-full flex-wrap gap-2 border-b border-base-300 bg-base-100 px-4 print:hidden">
+	<header class="navbar col-span-full flex-wrap gap-2 bg-base-200 px-4 md:px-6 print:hidden">
 		<button
 			type="button"
 			class="btn btn-square btn-ghost md:hidden"
 			aria-label="Open navigation"
 			onclick={() => (drawerOpen = true)}
 		>
-			☰
+			<Icon name="menu" size={20} />
 		</button>
 
+		<span class="hidden pr-4 text-xl font-bold tracking-tight md:inline">shigoto</span>
+
 		<div class="flex min-w-0 items-center gap-2">
-			<label for="org-select" class="text-sm whitespace-nowrap text-base-content/70">Organisation</label>
+			<label for="org-select" class="sr-only">Organisation</label>
 			<select
-				class="select select-sm max-w-40 min-w-0"
+				class="select select-sm select-ghost max-w-48 min-w-0 font-semibold"
 				id="org-select"
 				value={page.params.org}
 				onchange={(e) => switchOrg((e.target as HTMLSelectElement).value)}
@@ -111,27 +122,28 @@
 		<div class="ml-auto flex flex-wrap items-center gap-2">
 			<button
 				type="button"
-				class="btn btn-ghost btn-sm"
+				class="btn btn-ghost btn-sm btn-square"
 				onclick={() => theme.cycle()}
 				aria-label={`Theme: ${themeLabel} (click to change)`}
+				title={`Theme: ${themeLabel}`}
 			>
-				{themeLabel}
+				<Icon name={themeIcon} />
 			</button>
-			<div class="flex items-center gap-2">
-				<span class="hidden max-w-32 truncate min-[375px]:inline">{session.me?.user.name}</span>
+			<div class="flex items-center gap-1">
+				<span class="hidden max-w-32 truncate px-2 text-sm text-base-content/70 min-[375px]:inline">{session.me?.user.name}</span>
 				{#if session.me?.orgs.some((o) => o.portal)}
 					<a href="/portal" class="btn btn-ghost btn-sm">Portal</a>
 				{/if}
-				<button type="button" class="btn btn-outline btn-sm" onclick={logout}>Logout</button>
+				<button type="button" class="btn btn-ghost btn-sm" onclick={logout}><Icon name="sign-out" />Sign out</button>
 			</div>
 		</div>
 	</header>
 
-	<nav class="hidden border-r border-base-300 bg-base-100 py-2 md:block print:hidden" aria-label="Primary">
+	<nav class="hidden bg-(--color-sidebar) px-3 py-5 md:block print:hidden" aria-label="Primary">
 		{@render navList()}
 	</nav>
 
-	<main id="main-content" class="min-w-0 p-4 md:p-6">
+	<main id="main-content" class="min-w-0 p-4 md:p-8">
 		<!-- Switching org keeps the same route, so SvelteKit would reuse the
 		     page component and its onMount-loaded data would still be the
 		     previous org's. Keying on the org remounts the page instead. -->
