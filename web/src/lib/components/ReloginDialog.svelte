@@ -121,7 +121,7 @@
 			</div>
 		</form>
 		{#if sso}
-			<p class="m-0 text-center"><a class="link link-primary" href={ssoStartUrl()} aria-disabled={submitting || undefined} onclick={(event) => { if (submitting) event.preventDefault(); else session.clear(); }}>Sign in with SSO</a></p>
+			<p class="m-0 text-center"><a class="link link-primary" href={ssoStartUrl()} data-sveltekit-reload aria-disabled={submitting || undefined} onclick={(event) => { if (submitting) event.preventDefault(); else session.clear(); }}>Sign in with SSO</a></p>
 		{/if}
 	{/if}
 </Dialog>

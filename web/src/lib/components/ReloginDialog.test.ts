@@ -97,6 +97,7 @@ describe('ReloginDialog', () => {
 		});
 
 		const link = screen.getByRole('link', { name: /sign in with sso/i }) as HTMLAnchorElement;
+		expect(link.hasAttribute('data-sveltekit-reload')).toBe(true);
 		expect(link.getAttribute('href')).toBe(
 			'/api/v1/auth/oidc/start?next=' + encodeURIComponent('/acme/invoices?foo=bar')
 		);

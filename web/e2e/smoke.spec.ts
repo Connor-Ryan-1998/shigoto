@@ -41,6 +41,24 @@ test.beforeAll(async () => {
 
 test.afterAll(() => stack?.stop());
 
+test('SSO sign-in leaves the client router for the backend', async ({ page }) => {
+	await page.route('**/api/v1/meta', async (route) => {
+		const response = await route.fetch();
+		await route.fulfill({ json: { ...(await response.json()), sso: true } });
+	});
+	// Stop before the external IdP; only a document navigation should reach this stub.
+	await page.route('**/api/v1/auth/oidc/start?*', (route) =>
+		route.fulfill({ contentType: 'text/html', body: '<h1>Backend SSO entry</h1>' })
+	);
+	await page.goto(`${base}/login`);
+	const navigation = page.waitForRequest((request) =>
+		request.url().includes('/api/v1/auth/oidc/start?') && request.isNavigationRequest()
+	);
+	await page.getByRole('link', { name: 'Sign in with SSO' }).click();
+	await navigation;
+	await expect(page.getByRole('heading', { name: 'Backend SSO entry' })).toBeVisible();
+});
+
 test('login, dashboard tiles, and org switching', async ({ page }) => {
 	// Orgs are listed by name, so Alpha is the post-login default.
 	await signIn(page, base, email, password, '/org-a');

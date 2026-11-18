@@ -144,7 +144,7 @@
 		<Button type="submit" busy={submitting} disabled={magicSubmitting}>Sign in</Button>
 		{#if sso}
 			<div class="divider my-0">or</div>
-			<a class="btn btn-outline" href={oidcStartUrl()}>Sign in with SSO</a>
+			<a class="btn btn-outline" href={oidcStartUrl()} data-sveltekit-reload>Sign in with SSO</a>
 		{/if}
 	</form>
 

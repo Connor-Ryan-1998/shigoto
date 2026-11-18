@@ -47,6 +47,7 @@ describe('login page', () => {
 			name: /sign in with sso/i
 		})) as HTMLAnchorElement;
 		expect(link.getAttribute('href')).toBe('/api/v1/auth/oidc/start?next=%2Facme');
+		expect(link.hasAttribute('data-sveltekit-reload')).toBe(true);
 	});
 
 	it('shows the fixed message for a known error code', async () => {
