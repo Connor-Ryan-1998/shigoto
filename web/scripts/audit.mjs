@@ -7,14 +7,14 @@ import { fileURLToPath } from 'node:url';
 
 const exceptions = [
 	{
-		advisory: 'GHSA-gcqx-w48m-w2h4',
-		package: 'deepmerge',
-		expires: '2027-02-15',
+		advisory: 'GHSA-fc5q-39xc-vjpf',
+		package: 'picomatch',
+		expires: '2026-12-18',
 		owner: 'Connor Ryan',
 		reason:
-			'Build-time only: @sveltejs/vite-plugin-svelte merges repository-controlled Svelte config. ' +
-			'Not in the shipped bundle or Go binary. deepmerge 4.3.1 is the latest release and the ' +
-			'latest plugin still depends on it; no fixed version exists.'
+			'Build/test tooling only (vite, vitest, svelte-check, tinyglobby) matching repository-controlled ' +
+			'globs. Not in the shipped bundle or Go binary. picomatch 4.0.7 is the latest release and is ' +
+			'affected; no fixed version exists. High severity, so the expiry is short.'
 	}
 ];
 

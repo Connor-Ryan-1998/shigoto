@@ -89,16 +89,18 @@ recorded payment rather than sending their original full balance. Real-browser
 checks also cover financial forms, expiry/re-login,
 time billing, lease/rent-run idempotency, reconciliation and CSV reporting.
 
-**A green `verify` is not a clean vulnerability audit.** As of 2026-11-07,
-`task audit` reports GHSA-gcqx-w48m-w2h4 in `deepmerge@4.3.1` through the Svelte
-build plugin (four low-severity npm package entries for one advisory). The
-registry's latest deepmerge version is still 4.3.1. The reviewed plugin usage
-merges repository-controlled build configuration, not runtime request input;
-this is not proof that every build-tool input is safe. On 2026-11-15 the operator
-approved a scoped exception for this one advisory on `deepmerge`, expiring
-2027-02-15. `task audit` runs `web/scripts/audit.mjs`, which fails on any other
-advisory and on the exception once it expires. Re-review it then, and remove
-it once an upstream fix exists.
+**A green `verify` is not a clean vulnerability audit.** As of 2026-11-18,
+`task audit` reports high-severity ReDoS advisory GHSA-fc5q-39xc-vjpf in
+`picomatch@4.0.7`, used only by build and test tooling (vite, vitest,
+svelte-check, tinyglobby). 4.0.7 is the registry's latest version and is
+affected. Those tools match repository-controlled globs, not runtime request
+input, and picomatch is not in the shipped bundle or Go binary; this is not proof
+that every build-tool input is safe. On 2026-11-18 the operator approved a scoped
+exception for this one advisory on `picomatch`, expiring 2026-12-18. `task audit`
+runs `web/scripts/audit.mjs`, which fails on any other advisory and on the
+exception once it expires. Re-review it then, and remove it once an upstream fix
+exists. The earlier deepmerge exception (GHSA-gcqx-w48m-w2h4) was removed once
+the advisory no longer appeared.
 
 Historical settings audit records have **not** been rewritten and may still
 contain bank details. Existing limitations also remain: credit notes/refunds and
