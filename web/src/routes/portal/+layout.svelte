@@ -52,6 +52,7 @@
 			<nav aria-label="Portal" class="flex gap-1">
 				{#if currentOrg?.role === 'tenant'}
 					<a class={['btn btn-ghost btn-sm', page.url.pathname.startsWith(`/portal/${org}/rent`) && 'bg-primary/12 font-semibold text-primary']} href={`/portal/${org}/rent`} aria-current={page.url.pathname.startsWith(`/portal/${org}/rent`) ? 'page' : undefined}>Rent</a>
+					<a class={['btn btn-ghost btn-sm', page.url.pathname.startsWith(`/portal/${org}/repairs`) && 'bg-primary/12 font-semibold text-primary']} href={`/portal/${org}/repairs`} aria-current={page.url.pathname.startsWith(`/portal/${org}/repairs`) ? 'page' : undefined}>Repairs</a>
 				{/if}
 				<a class={['btn btn-ghost btn-sm', page.url.pathname.startsWith(`/portal/${org}/invoices`) && 'bg-primary/12 font-semibold text-primary']} href={`/portal/${org}/invoices`} aria-current={page.url.pathname.startsWith(`/portal/${org}/invoices`) ? 'page' : undefined}>Invoices</a>
 

@@ -196,3 +196,47 @@ export async function api<T>(
 	}
 	return JSON.parse(text) as T;
 }
+
+// uploadWithProgress posts file as the multipart "file" field named name to
+// url, reporting upload progress (0..1) - which fetch cannot - with the same
+// CSRF header and same-origin credentials as api(). Aborting signal rejects
+// with an AbortError DOMException; a non-2xx response rejects with ApiError.
+export function uploadWithProgress<T>(
+	url: string,
+	file: Blob,
+	name: string,
+	onProgress: (fraction: number) => void,
+	signal: AbortSignal
+): Promise<T> {
+	return new Promise<T>((resolve, reject) => {
+		const xhr = new XMLHttpRequest();
+		xhr.open('POST', url);
+		xhr.withCredentials = true;
+		xhr.setRequestHeader('X-Shigoto-CSRF', '1');
+		xhr.upload.onprogress = (e) => {
+			if (e.lengthComputable && e.total > 0) onProgress(e.loaded / e.total);
+		};
+		xhr.onload = () => {
+			let data: { error?: unknown } | undefined;
+			try {
+				data = xhr.responseText ? JSON.parse(xhr.responseText) : undefined;
+			} catch {
+				data = undefined;
+			}
+			if (xhr.status >= 200 && xhr.status < 300) {
+				onProgress(1);
+				resolve(data as T);
+				return;
+			}
+			if (xhr.status === 401) redirectToLogin();
+			const message = typeof data?.error === 'string' ? data.error : `Upload failed (${xhr.status})`;
+			reject(new ApiError(xhr.status, message));
+		};
+		xhr.onerror = () => reject(new ApiError(0, 'Upload failed. Check your connection and try again.'));
+		xhr.onabort = () => reject(new DOMException('Upload cancelled', 'AbortError'));
+		signal.addEventListener('abort', () => xhr.abort(), { once: true });
+		const form = new FormData();
+		form.append('file', file, name);
+		xhr.send(form);
+	});
+}

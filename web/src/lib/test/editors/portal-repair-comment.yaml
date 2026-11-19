@@ -1,0 +1,21 @@
+id: portal-repair-comment
+component: PortalRepairPage
+page: {org: acme, id: "7"}
+session: {perms: []}
+api:
+  GET /api/v1/portal/acme/maintenance/7:
+    ticket: {id: 7, ref: R-0007, title: Tap, description: Leak, category: plumbing, urgency: routine, status: new, supplier: null, access_notes: "", property_address: 12 Banksia St, created_at: "2026-11-19T01:00:00Z"}
+    files: []
+    events: []
+ready: Add a message
+fill: {Add a message: Thanks}
+submit: Send
+request: POST /api/v1/portal/acme/maintenance/7/comments
+contract:
+  blocks_duplicate_submit: true
+  preserves_input_on: 422
+skip:
+  cancel: inline composer with no Cancel; clearing the box discards the draft
+  busy_dismiss_blocked: inline composer, nothing to dismiss
+  dirty_dismiss_confirms: inline composer, nothing to dismiss
+  dirty_navigation_blocked: a one-line message draft is not guarded, like other inline composers

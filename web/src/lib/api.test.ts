@@ -245,3 +245,58 @@ describe('api', () => {
 		});
 	});
 });
+
+describe('uploadWithProgress', () => {
+	it('posts multipart with the CSRF header, reports progress and parses JSON', async () => {
+		const { uploadWithProgress } = await vi.importActual<typeof import('./api')>('./api');
+		const sent: { method?: string; url?: string; headers: Record<string, string>; body?: FormData } = { headers: {} };
+		class FakeXHR {
+			upload = { onprogress: null as ((e: { lengthComputable: boolean; loaded: number; total: number }) => void) | null };
+			status = 0;
+			responseText = '';
+			onload: (() => void) | null = null;
+			onerror: (() => void) | null = null;
+			onabort: (() => void) | null = null;
+			withCredentials = false;
+			open(method: string, url: string) { sent.method = method; sent.url = url; }
+			setRequestHeader(k: string, v: string) { sent.headers[k] = v; }
+			abort() { this.onabort?.(); }
+			send(body: FormData) {
+				sent.body = body;
+				this.upload.onprogress?.({ lengthComputable: true, loaded: 5, total: 10 });
+				this.status = 201;
+				this.responseText = '{"pending_id":3}';
+				this.onload?.();
+			}
+		}
+		vi.stubGlobal('XMLHttpRequest', FakeXHR);
+		const progress: number[] = [];
+		const out = await uploadWithProgress<{ pending_id: number }>('/u', new Blob(['x']), 'a.png', (f) => progress.push(f), new AbortController().signal);
+		expect(out).toEqual({ pending_id: 3 });
+		expect(sent.method).toBe('POST');
+		expect(sent.headers['X-Shigoto-CSRF']).toBe('1');
+		expect((sent.body!.get('file') as File).name).toBe('a.png');
+		expect(progress).toEqual([0.5, 1]);
+		vi.unstubAllGlobals();
+	});
+
+	it('rejects with the API error message', async () => {
+		const { uploadWithProgress, ApiError } = await vi.importActual<typeof import('./api')>('./api');
+		class FakeXHR {
+			upload = { onprogress: null };
+			status = 413;
+			responseText = '{"error":"file too large"}';
+			onload: (() => void) | null = null;
+			onerror = null;
+			onabort = null;
+			withCredentials = false;
+			open() {}
+			setRequestHeader() {}
+			abort() {}
+			send() { this.onload?.(); }
+		}
+		vi.stubGlobal('XMLHttpRequest', FakeXHR);
+		await expect(uploadWithProgress('/u', new Blob(['x']), 'a.png', () => {}, new AbortController().signal)).rejects.toEqual(new ApiError(413, 'file too large'));
+		vi.unstubAllGlobals();
+	});
+});

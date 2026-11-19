@@ -1,0 +1,18 @@
+id: portal-repair-new
+component: PortalRepairNewPage
+page: {org: acme}
+session: {perms: []}
+api:
+  GET /api/v1/portal/acme/maintenance: {emergency_phone: "", leases: [{id: 4, property_address: 12 Banksia St, active: true}], tickets: []}
+ready: What's wrong?
+fill: {"What's wrong?": Tap leaking, Details: Water under the sink}
+submit: Submit repair
+request: POST /api/v1/portal/acme/maintenance
+contract:
+  blocks_duplicate_submit: true
+  preserves_input_on: 422
+  busy_dismiss_blocked: Cancel
+  dirty_navigation_blocked: true
+skip:
+  cancel: page editor; Cancel navigates back to the repairs list after the unsaved-changes check (covered by dirty_navigation_blocked)
+  dirty_dismiss_confirms: page editor, no dialog to dismiss; leaving is covered by dirty_navigation_blocked

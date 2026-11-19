@@ -17,7 +17,17 @@ import { session } from '../session.svelte';
 vi.mock('../api', async (importOriginal) => {
 	const real = await importOriginal<typeof import('../api')>();
 	const { apiMock } = await import('./api-spy');
-	return { ...real, api: (...args: Parameters<typeof real.api>) => apiMock(...args) };
+	return {
+		...real,
+		api: (...args: Parameters<typeof real.api>) => apiMock(...args),
+		// Uploads route through the same mock as POST <url> with
+		// {upload: <name>}; progress jumps straight to done.
+		uploadWithProgress: async (url: string, _file: Blob, name: string, onProgress?: (f: number) => void) => {
+			const out = await apiMock('POST', url, { upload: name });
+			onProgress?.(1);
+			return out;
+		}
+	};
 });
 
 vi.mock('$app/state', async () => {

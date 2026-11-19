@@ -71,11 +71,13 @@ describe('portal layout', () => {
 		session.setMe(meWithOrgs([{ slug: 'acme', name: 'Acme', role: 'tenant', portal: true }]));
 		const { unmount } = render(Layout, { children: childSnippet() });
 		expect(screen.getByRole('link', { name: 'Rent' }).getAttribute('href')).toBe('/portal/acme/rent');
+		expect(screen.getByRole('link', { name: 'Repairs' }).getAttribute('href')).toBe('/portal/acme/repairs');
 		expect(screen.queryByRole('link', { name: 'Leases' })).toBeNull();
 		unmount();
 
 		session.setMe(meWithOrgs([{ slug: 'acme', name: 'Acme', role: 'client', portal: true }]));
 		render(Layout, { children: childSnippet() });
 		expect(screen.queryByRole('link', { name: 'Rent' })).toBeNull();
+		expect(screen.queryByRole('link', { name: 'Repairs' })).toBeNull();
 	});
 });

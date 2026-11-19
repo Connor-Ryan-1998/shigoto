@@ -197,7 +197,7 @@ screens that need no route-specific rewrite.
 | --- | --- | --- |
 | `+layout.svelte` | Announced session loading; retained retry and re-login | `+layout.test.ts`, `e2e/financial-workflows.spec.ts` |
 | `[org]/+layout.svelte` | Active navigation, retained skip link, org-keyed content and mobile drawer | `+layout.svelte.test.ts`, `e2e/smoke.spec.ts` |
-| `portal/+layout.svelte` | Separate shell, active navigation (tenants: Rent, Invoices), skip link, shared spacing, chrome hidden in print | `+layout.svelte.test.ts`, `e2e/portal.spec.ts` |
+| `portal/+layout.svelte` | Separate shell, active navigation (tenants: Rent, Repairs, Invoices), skip link, shared spacing, chrome hidden in print | `+layout.svelte.test.ts`, `e2e/portal.spec.ts` |
 | `+page.svelte` | Redirect-only; no artificial form or heading required | `e2e/smoke.spec.ts` |
 | `[org]/[...rest]/+page.svelte` | Existing PageHeader not-found layout retained | route review; shared PageHeader tests |
 | `[org]/+page.svelte` | Existing shared heading/cards/state layout retained; property section adds an open-repairs card (hidden when none) | `+page.test.ts`, `e2e/smoke.spec.ts` |
@@ -235,6 +235,9 @@ screens that need no route-specific rewrite.
 | `portal/[org]/leases/+page.svelte` | Redirect-only to the Rent tab (old links keep working) | route review |
 | `portal/[org]/rent/+page.svelte` | Tenant-only; lease selector only with several leases; summary, FY/custom statement downloads, newest-first history with "Show earlier"; latest-response guard | `+page.svelte.test.ts`, `internal/httpapi/testdata/cases/portal_rent.yaml`, `e2e/portal.spec.ts` |
 | `portal/[org]/rent/[leaseId]/receipts/[paymentId]/+page.svelte` | Printable receipt (portal chrome hidden in print) | `+page.svelte.test.ts`, `portal_rent.yaml` |
+| `portal/[org]/repairs/+page.svelte` | Tenant-only repair cards with status; Report a repair only with a current lease | `+page.svelte.test.ts`, `internal/httpapi/testdata/cases/portal_maintenance.yaml` |
+| `portal/[org]/repairs/new/+page.svelte` | Dedicated guarded editor; urgent call-now banner; camera/library/voice media uploaded immediately with progress, Retry/Remove; submit blocked while uploading | `+page.svelte.test.ts`, `lib/test/editors/portal-repair-new.yaml`, `lib/modules/property/MediaPicker.test.ts`, `VoiceRecorder.test.ts`, `e2e/maintenance.spec.ts` |
+| `portal/[org]/repairs/[id]/+page.svelte` | Status, newest-first timeline (no staff notes), inline message composer, add media, cancel while new/viewed | `+page.svelte.test.ts`, `lib/test/editors/portal-repair-comment.yaml`, `portal_maintenance.yaml`, `e2e/maintenance.spec.ts` |
 | `login/+page.svelte` | Shared fields/actions/feedback; pending-request input locks | `+page.test.ts`, all browser suites |
 | `auth/magic/+page.svelte` | Compact status/error layout; one-use token handling retained | `+page.test.ts`, `e2e/portal.spec.ts` |
 | `invite/[token]/+page.svelte` | Compact shared-field form; existing invalid/expired states retained | `+page.test.ts`, `e2e/invite.spec.ts` |

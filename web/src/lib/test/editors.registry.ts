@@ -17,6 +17,8 @@ import Item21MappingDialog from '../modules/property/Item21MappingDialog.svelte'
 import NewTicketDialog from '../modules/property/NewTicketDialog.svelte';
 import AssignSupplierDialog from '../modules/property/AssignSupplierDialog.svelte';
 import TicketMessageDialog from '../modules/property/TicketMessageDialog.svelte';
+import PortalRepairNewPage from '../../routes/portal/[org]/repairs/new/+page.svelte';
+import PortalRepairPage from '../../routes/portal/[org]/repairs/[id]/+page.svelte';
 import PropertyNotesPage from '../../routes/[org]/properties/[id]/notes/+page.svelte';
 
 export const components = {
@@ -35,6 +37,8 @@ export const components = {
 	LeasePage,
 	LogTimeDialog,
 	ProjectDialog,
+	PortalRepairNewPage,
+	PortalRepairPage,
 	PropertyDetailsPage,
 	PropertyNotesPage,
 	SettingsPage
