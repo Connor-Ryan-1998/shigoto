@@ -548,3 +548,51 @@ func ListTicketFiles(ctx context.Context, q core.Querier, orgID, ticketID int64)
 	}
 	return out, rows.Err()
 }
+
+// RepairItem is one open repair on the dashboard.
+type RepairItem struct {
+	TicketID        int64  `json:"ticket_id"`
+	PropertyID      int64  `json:"property_id"`
+	PropertyAddress string `json:"property_address"`
+	Ref             string `json:"ref"`
+	Title           string `json:"title"`
+	Urgency         string `json:"urgency"`
+	Status          string `json:"status"`
+}
+
+// RepairsSummary is the dashboard's open-repairs card: the count of open
+// tickets and the five most pressing.
+type RepairsSummary struct {
+	OpenCount int          `json:"open_count"`
+	Items     []RepairItem `json:"items"`
+}
+
+// OpenRepairs summarises orgID's open tickets, most urgent first, then new
+// before acknowledged, then oldest first.
+func OpenRepairs(ctx context.Context, q core.Querier, orgID int64) (RepairsSummary, error) {
+	s := RepairsSummary{Items: []RepairItem{}}
+	if err := q.QueryRow(ctx, `SELECT count(*) FROM maintenance_tickets WHERE org_id = $1 AND status NOT IN ('completed', 'cancelled')`, orgID).Scan(&s.OpenCount); err != nil {
+		return s, err
+	}
+	rows, err := q.Query(ctx, `
+		SELECT t.id, t.property_id, coalesce(nullif(p.address, ''), p.name), t.ref_no, t.title, t.urgency, t.status
+		FROM maintenance_tickets t JOIN properties p ON p.id = t.property_id
+		WHERE t.org_id = $1 AND t.status NOT IN ('completed', 'cancelled')
+		ORDER BY CASE t.urgency WHEN 'urgent' THEN 0 WHEN 'soon' THEN 1 ELSE 2 END,
+			t.status <> 'new', t.created_at, t.id
+		LIMIT 5`, orgID)
+	if err != nil {
+		return s, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var it RepairItem
+		var ref int
+		if err := rows.Scan(&it.TicketID, &it.PropertyID, &it.PropertyAddress, &ref, &it.Title, &it.Urgency, &it.Status); err != nil {
+			return s, err
+		}
+		it.Ref = fmt.Sprintf("R-%04d", ref)
+		s.Items = append(s.Items, it)
+	}
+	return s, rows.Err()
+}

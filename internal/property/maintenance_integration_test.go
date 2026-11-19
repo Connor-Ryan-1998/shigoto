@@ -351,3 +351,30 @@ func TestListTicketsFilters(t *testing.T) {
 		t.Fatalf("open %d all %d lease %d none %d", len(openOnly), len(all), len(byLease), len(none))
 	}
 }
+
+func TestOpenRepairsSummaryOrdering(t *testing.T) {
+	w := newTicketWorld(t)
+	raise := func(title, urgency, status string) {
+		w.e.Ticket(w.org, property.NewTicket{LeaseID: &w.lease.ID, ContactID: &w.tenant, Title: title, Urgency: urgency}, status, "")
+	}
+	raise("routine new", "routine", "new")
+	raise("urgent assigned", "urgent", "assigned")
+	raise("soon new", "soon", "new")
+	raise("done", "urgent", "completed")
+	raise("gone", "urgent", "cancelled")
+
+	s, err := property.OpenRepairs(w.e.Ctx, w.e.Pool, w.org.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var titles []string
+	for _, it := range s.Items {
+		titles = append(titles, it.Title)
+	}
+	if s.OpenCount != 3 || fmt.Sprint(titles) != "[urgent assigned soon new routine new]" {
+		t.Fatalf("open %d items %v", s.OpenCount, titles)
+	}
+	if s.Items[0].PropertyID != w.propertyID || s.Items[0].Ref == "" {
+		t.Fatalf("item = %+v", s.Items[0])
+	}
+}

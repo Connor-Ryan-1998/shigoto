@@ -4,6 +4,14 @@ seed:
   orgs: [acme]
   users:
     keeper: {org: acme, role: bookkeeper}
+  contacts:
+    c_t: {org: acme, kind: tenant, name: Tenant}
+  properties:
+    prop: {org: acme}
+  leases:
+    lease: {org: acme, property: prop, tenant: c_t}
+  tickets:
+    leak: {org: acme, lease: lease, raised_by: c_t, title: Leak}
 
 cases:
   # Bookkeeper holds property, timesheets and reports read but none of the
@@ -16,3 +24,13 @@ cases:
       status: 200
       body:
         modules: {property: {}, timesheets: {}, reconciliation: {}}
+
+  - name: open repairs appear on the property section
+    as: keeper
+    request: {method: GET, path: /api/v1/orgs/acme/dashboard}
+    expect:
+      status: 200
+      body:
+        modules:
+          property:
+            repairs: {open_count: 1, items: [{ticket_id: "{leak}", property_id: "{prop}", ref: R-0001, title: Leak, urgency: routine, status: new}]}

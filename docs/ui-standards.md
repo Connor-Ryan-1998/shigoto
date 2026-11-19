@@ -200,7 +200,7 @@ screens that need no route-specific rewrite.
 | `portal/+layout.svelte` | Separate shell, active navigation (tenants: Rent, Invoices), skip link, shared spacing, chrome hidden in print | `+layout.svelte.test.ts`, `e2e/portal.spec.ts` |
 | `+page.svelte` | Redirect-only; no artificial form or heading required | `e2e/smoke.spec.ts` |
 | `[org]/[...rest]/+page.svelte` | Existing PageHeader not-found layout retained | route review; shared PageHeader tests |
-| `[org]/+page.svelte` | Existing shared heading/cards/state layout retained | `+page.test.ts`, `e2e/smoke.spec.ts` |
+| `[org]/+page.svelte` | Existing shared heading/cards/state layout retained; property section adds an open-repairs card (hidden when none) | `+page.test.ts`, `e2e/smoke.spec.ts` |
 | `[org]/projects/+page.svelte` | Shared filters/load states; explicit create dialog | `+page.svelte.test.ts` |
 | `[org]/projects/[id]/+page.svelte` | Shared back/header/filters; domain summary/chart/tables retained | `+page.svelte.test.ts`; project dialog `lib/test/editors/project-dialog.yaml` |
 | `[org]/time/+page.svelte` | Shared header/filter/load states; keyboard-operable view trigger | `+page.svelte.test.ts`, `lib/test/editors/log-time-dialog.yaml`, `e2e/financial-workflows.spec.ts` |

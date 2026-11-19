@@ -32,6 +32,8 @@ type propertyDashboard struct {
 	// InsuranceRenewingSoon counts properties whose current insurance
 	// policy renews within the next 30 days.
 	InsuranceRenewingSoon int `json:"insurance_renewing_soon"`
+	// Repairs is the open-repairs card.
+	Repairs RepairsSummary `json:"repairs"`
 }
 
 // dashboardSection builds the property module's dashboard section: arrears
@@ -81,7 +83,13 @@ func dashboardSection(ctx context.Context, q core.Querier, orgID int64, today ti
 		return nil, err
 	}
 
+	repairs, err := OpenRepairs(ctx, q, orgID)
+	if err != nil {
+		return nil, err
+	}
+
 	return propertyDashboard{
+		Repairs:               repairs,
 		InsuranceRenewingSoon: renewing,
 		ArrearsTotal:          int64(arrears),
 		UnissuedTotal:         int64(unissued),
