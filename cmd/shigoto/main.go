@@ -28,6 +28,7 @@ import (
 	"shigoto/internal/db"
 	"shigoto/internal/httpapi"
 	"shigoto/internal/scheduler"
+	"shigoto/internal/storage"
 )
 
 func main() {
@@ -213,7 +214,8 @@ func serve() error {
 		}))
 	}
 	a := auth.New(pool, strings.HasPrefix(cfg.BaseURL, "https://"), authOpts...)
-	deps := httpapi.Deps{Pool: pool, Auth: a, Cfg: cfg}
+	store := storage.NewDisk(cfg.FilesDir)
+	deps := httpapi.Deps{Pool: pool, Auth: a, Cfg: cfg, Store: store}
 	billingSvc := httpapi.DefaultBilling(deps)
 	deps.Billing = billingSvc
 	handler := httpapi.New(deps)
@@ -239,6 +241,7 @@ func serve() error {
 				Billing:         billingSvc,
 				Location:        cfg.Location,
 				PropertyEnabled: cfg.Modules["property"],
+				Store:           store,
 			}, time.Hour, time.Now)
 		}()
 	}

@@ -3,9 +3,12 @@
 package scheduler
 
 import (
+	"bytes"
 	"testing"
 	"time"
 
+	"shigoto/internal/core"
+	"shigoto/internal/storage"
 	"shigoto/internal/testkit"
 )
 
@@ -114,5 +117,28 @@ func TestTickPropertyDisabled(t *testing.T) {
 
 	if n := e.Count("rent_periods", "org_id = $1", org.ID); n != 0 {
 		t.Errorf("rent_periods = %d, want 0 when PropertyEnabled is false", n)
+	}
+}
+
+func TestTickPrunesExpiredPendingUploads(t *testing.T) {
+	e := testkit.New(t)
+	org := e.Org("acme")
+	user := e.User("u@example.com")
+	store := storage.NewDisk(t.TempDir())
+	f, err := core.SaveFile(e.Ctx, e.Pool, store, org.ID, "p.png", bytes.NewReader(testkit.PNG), core.MediaPolicy(0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 11, 19, 12, 0, 0, 0, time.UTC)
+	if _, err := e.Pool.Exec(e.Ctx, `INSERT INTO maintenance_pending_files (org_id, file_id, user_id, created_at) VALUES ($1, $2, $3, $4)`,
+		org.ID, f.ID, user.ID, now.Add(-48*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	j := Jobs{Pool: e.Pool, Billing: e.BillingService(), Location: time.UTC, Store: store}
+	if err := j.Tick(e.Ctx, now); err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+	if n := e.Count("files", "id = $1", f.ID); n != 0 {
+		t.Fatalf("expired upload kept")
 	}
 }

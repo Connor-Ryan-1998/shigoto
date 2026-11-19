@@ -1,5 +1,5 @@
 // Package scheduler runs shigoto's recurring in-process jobs: hourly rent
-// runs and session pruning. Because property.RunRent is idempotent, an
+// runs, session pruning and expired pending-upload clean-up. Because property.RunRent is idempotent, an
 // hourly tick is cheap and catches up after downtime.
 package scheduler
 
@@ -14,6 +14,7 @@ import (
 	"shigoto/internal/auth"
 	"shigoto/internal/billing"
 	"shigoto/internal/property"
+	"shigoto/internal/storage"
 )
 
 // lockID is the Postgres advisory lock key held for the duration of one
@@ -31,6 +32,9 @@ type Jobs struct {
 	// PropertyEnabled gates the rent run; it should match
 	// Config.Modules["property"].
 	PropertyEnabled bool
+	// Store holds uploaded files, for pruning expired pending uploads. Nil
+	// skips that job.
+	Store storage.Store
 }
 
 // Run calls s.Tick(ctx, now()) once immediately, then again every tick of
@@ -103,6 +107,11 @@ func (j Jobs) Tick(ctx context.Context, now time.Time) error {
 		}
 	}
 
+	if j.Store != nil {
+		if err := property.PrunePendingFiles(ctx, j.Pool, j.Store, now); err != nil {
+			slog.Error("pruning pending uploads failed", "error", err)
+		}
+	}
 	if err := auth.PruneSessions(ctx, j.Pool, now); err != nil {
 		slog.Error("pruning sessions failed", "error", err)
 	}
