@@ -65,6 +65,9 @@
 				{/if}
 			{:else if visit.entry_state === 'withdrawn'}
 				<p class="text-sm">You've withdrawn entry permission. Please be home or arrange access.</p>
+				{#if !started}
+					<div><Button size="sm" variant="secondary" busy={busy} onclick={() => post('confirm', { entry_mode: 'permitted' })}>Allow entry again</Button></div>
+				{/if}
 			{:else}
 				<p class="text-sm">You've confirmed you'll be home.</p>
 			{/if}

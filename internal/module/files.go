@@ -54,7 +54,8 @@ func FileToResponse(f core.File) FileResponse {
 	return FileResponse{ID: f.ID, MIME: f.MIME, SizeBytes: f.SizeBytes, OriginalName: f.OriginalName}
 }
 
-// HandleUpload streams a multipart "file" upload into d.Store under pol.
+// HandleUpload streams a multipart "file" upload into d.Store under pol,
+// holding no database connection while the body is read.
 // It refuses the upload with 507 when the store's free space is below
 // Cfg.UploadMinFreeBytes, reads the body part by part (other fields before
 // "file" are skipped) so nothing is spooled to memory or temp disk, and
@@ -72,6 +73,7 @@ func HandleUpload(w http.ResponseWriter, r *http.Request, d Deps, pol core.Uploa
 		WriteError(w, http.StatusInsufficientStorage, "insufficient storage")
 		return core.File{}, false
 	}
+	withIdleDeadline(w, r)
 	if pol.MaxBytes > 0 {
 		// Headroom for multipart framing and small fields; SaveFile
 		// enforces the exact file limit.
@@ -105,10 +107,21 @@ func HandleUpload(w http.ResponseWriter, r *http.Request, d Deps, pol core.Uploa
 	defer part.Close()
 
 	p := auth.From(r.Context())
+	// Stream the body to staging with no connection or transaction held;
+	// only the short record step below touches the database.
+	staged, err := core.StageFile(r.Context(), d.Store, p.OrgID, part.FileName(), part, pol)
+	if err != nil {
+		if isTooLarge(err) {
+			WriteError(w, http.StatusRequestEntityTooLarge, "file too large")
+			return core.File{}, false
+		}
+		WriteCoreError(w, err)
+		return core.File{}, false
+	}
 	var created core.File
 	err = RunInTx(r.Context(), d.Pool, func(tx pgx.Tx) error {
 		var err error
-		created, err = core.SaveFile(r.Context(), tx, d.Store, p.OrgID, part.FileName(), part, pol)
+		created, err = staged.Save(r.Context(), tx)
 		if err != nil {
 			return err
 		}
@@ -123,11 +136,14 @@ func HandleUpload(w http.ResponseWriter, r *http.Request, d Deps, pol core.Uploa
 		return nil
 	})
 	if err != nil {
-		if isTooLarge(err) {
-			WriteError(w, http.StatusRequestEntityTooLarge, "file too large")
-			return core.File{}, false
-		}
+		// Rejected after streaming (e.g. a closed ticket): drop the bytes so
+		// nothing is left on disk.
+		_ = staged.Abort()
 		WriteCoreError(w, err)
+		return core.File{}, false
+	}
+	if err := staged.Commit(r.Context()); err != nil {
+		WriteCoreError(w, fmt.Errorf("storing upload: %w", err))
 		return core.File{}, false
 	}
 	return created, true

@@ -50,7 +50,7 @@
 		<span class="hidden pr-2 text-lg font-semibold tracking-tight min-[375px]:inline">{currentOrg?.name ?? 'Portal'}</span>
 		{#if org}
 			<nav aria-label="Portal" class="flex gap-1">
-				{#if currentOrg?.role === 'tenant'}
+				{#if currentOrg?.role === 'tenant' && session.modules.includes('property')}
 					<a class={['btn btn-ghost btn-sm', page.url.pathname.startsWith(`/portal/${org}/rent`) && 'bg-primary/12 font-semibold text-primary']} href={`/portal/${org}/rent`} aria-current={page.url.pathname.startsWith(`/portal/${org}/rent`) ? 'page' : undefined}>Rent</a>
 					<a class={['btn btn-ghost btn-sm', page.url.pathname.startsWith(`/portal/${org}/repairs`) && 'bg-primary/12 font-semibold text-primary']} href={`/portal/${org}/repairs`} aria-current={page.url.pathname.startsWith(`/portal/${org}/repairs`) ? 'page' : undefined}>Repairs</a>
 				{/if}

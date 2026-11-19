@@ -401,7 +401,11 @@ func ConfirmVisit(ctx context.Context, tx core.Querier, orgID, visitID, userID i
 	if err != nil {
 		return Visit{}, err
 	}
-	if v.Status != "booked" && v.Status != "change_requested" {
+	// A booked visit, one awaiting a change, or - before it starts - a
+	// confirmed one whose entry was withdrawn (so the tenant can grant
+	// entry again without disturbing the agreed time).
+	regrant := v.Status == "confirmed" && v.EntryWithdrawnAt != nil && clockNow().Before(v.StartsAt)
+	if v.Status != "booked" && v.Status != "change_requested" && !regrant {
 		return Visit{}, core.ErrInvalidState
 	}
 	granted := "NULL"

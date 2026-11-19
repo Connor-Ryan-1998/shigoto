@@ -195,7 +195,7 @@ func deletePending(w http.ResponseWriter, r *http.Request, d module.Deps, p auth
 		module.WriteError(w, http.StatusNotFound, "not found")
 		return
 	}
-	if err := property.DeletePendingFile(r.Context(), d.Pool, p.OrgID, p.UserID, id); err != nil {
+	if err := property.DeletePendingFile(r.Context(), d.Pool, d.Store, p.OrgID, p.UserID, id); err != nil {
 		module.WriteCoreError(w, err)
 		return
 	}

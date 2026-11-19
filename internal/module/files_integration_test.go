@@ -5,7 +5,10 @@ package module_test
 import (
 	"bytes"
 	"context"
+	"io"
+	"mime/multipart"
 	"testing"
+	"time"
 
 	"shigoto/internal/storage"
 	"shigoto/internal/testkit"
@@ -58,5 +61,35 @@ func TestUploadIgnoresOtherPartsBeforeFile(t *testing.T) {
 	rr := s.UploadForm("/api/v1/orgs/acme/files", "r.png", testkit.PNG, map[string]string{"note": "x"})
 	if rr.Code != 201 {
 		t.Fatalf("status %d body %s", rr.Code, rr.Body)
+	}
+}
+
+// TestUploadHoldsNoConnectionWhileStreaming: a slow client must not pin a
+// pool connection (or an open transaction) for the length of its upload.
+func TestUploadHoldsNoConnectionWhileStreaming(t *testing.T) {
+	e := testkit.New(t)
+	h := e.Handler()
+	_, s := e.OwnerSession("acme", h)
+
+	pr, pw := io.Pipe()
+	mw := multipart.NewWriter(pw)
+	done := make(chan testkit.Response, 1)
+	go func() {
+		done <- s.DoWith("POST", "/api/v1/orgs/acme/files", pr, map[string]string{"Content-Type": mw.FormDataContentType()})
+	}()
+	part, _ := mw.CreateFormFile("file", "slow.png")
+	if _, err := part.Write(testkit.PNG); err != nil {
+		t.Fatal(err)
+	}
+	// The handler has read the sniff bytes and is blocked waiting for more.
+	time.Sleep(200 * time.Millisecond)
+	if n := e.Pool.Stat().AcquiredConns(); n != 0 {
+		t.Errorf("acquired connections while the body is still streaming = %d, want 0", n)
+	}
+	_, _ = part.Write(bytes.Repeat([]byte{0}, 1024))
+	_ = mw.Close()
+	_ = pw.Close()
+	if rr := <-done; rr.Code != 201 {
+		t.Fatalf("status %d %s", rr.Code, rr.Body)
 	}
 }

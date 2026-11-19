@@ -160,18 +160,29 @@ func LeaseAccount(ctx context.Context, q core.Querier, orgID, leaseID int64) (Ac
 			Date: inv.date, Kind: EntryCharge, Description: chargeDescription(inv),
 			Debit: core.Cents(inv.total), InvoiceID: inv.id,
 		})
-		recoverable := int64(0)
+		// Payments up to paidAtWriteOff (total minus the written-off
+		// remainder) were already counted when the debt was written off;
+		// anything recorded beyond that - in entry order (payment id), not
+		// by paid_on, so backdated reconciliation still counts - recovers
+		// written-off debt.
+		recoverable, paidAtWriteOff := int64(0), int64(0)
 		if inv.writtenOffOn != nil && inv.writtenOffAmount > 0 {
 			recoverable = inv.writtenOffAmount
+			paidAtWriteOff = inv.total - inv.writtenOffAmount
 			entries = append(entries, AccountEntry{
 				Date: *inv.writtenOffOn, Kind: EntryWriteOff, Description: "Written off",
 				Credit: core.Cents(inv.writtenOffAmount), InvoiceID: inv.id,
 			})
 		}
-		for _, p := range paymentsByInvoice[inv.id] {
+		pays := append([]payment(nil), paymentsByInvoice[inv.id]...)
+		sort.Slice(pays, func(i, j int) bool { return pays[i].id < pays[j].id })
+		var cumulative int64
+		for _, p := range pays {
 			id := p.id
-			if recoverable > 0 && !p.paidOn.Before(*inv.writtenOffOn) {
-				recovered := min(recoverable, p.amount)
+			before := cumulative
+			cumulative += p.amount
+			if recoverable > 0 && cumulative > paidAtWriteOff {
+				recovered := min(recoverable, cumulative-max(before, paidAtWriteOff))
 				recoverable -= recovered
 				entries = append(entries, AccountEntry{
 					Date: p.paidOn, Kind: EntryWriteOffReversed, Description: "Write-off reversed",

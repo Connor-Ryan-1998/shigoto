@@ -113,3 +113,29 @@ func TestPrunePendingFiles(t *testing.T) {
 		}
 	}
 }
+
+func TestDeletePendingFileRemovesUnreferencedFile(t *testing.T) {
+	w := newTicketWorld(t)
+	store := storage.NewDisk(t.TempDir())
+	f, err := core.SaveFile(w.e.Ctx, w.e.Pool, store, w.org.ID, "p.png", bytes.NewReader(testkit.PNG), core.MediaPolicy(0))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var id int64
+	if err := w.tx(t, func(tx pgx.Tx) error {
+		var err error
+		id, err = property.SavePendingFile(w.e.Ctx, tx, w.org.ID, w.tenantUser.ID, f)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := property.DeletePendingFile(w.e.Ctx, w.e.Pool, store, w.org.ID, w.tenantUser.ID, id); err != nil {
+		t.Fatal(err)
+	}
+	if n := w.e.Count("files", "id = $1", f.ID); n != 0 {
+		t.Fatalf("files row kept")
+	}
+	if _, err := core.OpenFile(w.e.Ctx, store, f); !errors.Is(err, storage.ErrNotFound) {
+		t.Fatalf("blob kept: %v", err)
+	}
+}

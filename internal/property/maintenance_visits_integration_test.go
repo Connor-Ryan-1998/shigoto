@@ -12,10 +12,11 @@ import (
 
 	"shigoto/internal/core"
 	"shigoto/internal/property"
+	"shigoto/internal/testkit"
 )
 
 var (
-	visitStart = time.Date(2026, 11, 24, 9, 0, 0, 0, time.UTC)
+	visitStart = time.Date(2099, 11, 24, 9, 0, 0, 0, time.UTC)
 	visitEnd   = visitStart.Add(2 * time.Hour)
 )
 
@@ -294,5 +295,43 @@ func TestCreateTicketWithPreferenceAndAvailability(t *testing.T) {
 	if _, err := w.raise(t, property.NewTicket{LeaseID: &w.lease.ID, ContactID: &w.tenant, UserID: w.tenantUser.ID,
 		Availability: []property.AvailabilityWindow{{Date: today.AddDate(0, 0, -1), Slot: "morning"}}}); !errors.Is(err, core.ErrInvalidInput) {
 		t.Fatalf("past window: %v", err)
+	}
+}
+
+func TestRegrantEntryAfterWithdraw(t *testing.T) {
+	w := newTicketWorld(t)
+	tk := w.assigned(t)
+	v := w.book(t, tk.ID)
+	confirm := func(mode string) (property.Visit, error) {
+		return w.do(t, func(tx pgx.Tx) (property.Visit, error) {
+			return property.ConfirmVisit(w.e.Ctx, tx, w.org.ID, v.ID, w.tenantUser.ID, mode)
+		})
+	}
+	if _, err := confirm("permitted"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.do(t, func(tx pgx.Tx) (property.Visit, error) {
+		return property.WithdrawEntry(w.e.Ctx, tx, w.org.ID, v.ID, w.tenantUser.ID, visitStart.Add(-time.Hour))
+	}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := confirm("permitted")
+	if err != nil || got.EntryState() != "permitted" || got.StartsAt != v.StartsAt {
+		t.Fatalf("re-grant: %+v %v", got, err)
+	}
+}
+
+// Consent was given for one tradesperson: swapping them while a visit is
+// booked would carry it to someone the tenant never agreed to.
+func TestSupplierLockedWhileVisitOpen(t *testing.T) {
+	w := newTicketWorld(t)
+	tk := w.assigned(t)
+	w.book(t, tk.ID)
+	other := w.e.Contact(w.org, testkit.Kind("supplier"), testkit.Name("Other Plumbing")).ID
+	if err := w.tx(t, func(tx pgx.Tx) error {
+		_, err := property.AssignSupplier(w.e.Ctx, tx, w.org.ID, tk.ID, w.staff.ID, other)
+		return err
+	}); !errors.Is(err, core.ErrInvalidState) {
+		t.Fatalf("swap with open visit: %v", err)
 	}
 }

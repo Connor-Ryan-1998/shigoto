@@ -6,9 +6,14 @@ import (
 	"bytes"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strconv"
 	"testing"
 
 	"shigoto/internal/auth"
+	"shigoto/internal/property"
+	"shigoto/internal/storage"
 	"shigoto/internal/testkit"
 )
 
@@ -92,5 +97,28 @@ func TestTenantRaisesTicketWithMedia(t *testing.T) {
 	// Adding media to the existing ticket.
 	if rr := tenant.Upload(fmt.Sprintf("/api/v1/portal/acme/maintenance/%d/files", ticket.ID), "more.png", append(append([]byte{}, testkit.PNG...), 9)); rr.Code != http.StatusCreated {
 		t.Fatalf("add file: %d %s", rr.Code, rr.Body)
+	}
+}
+
+func TestUploadToClosedTicketLeavesNothing(t *testing.T) {
+	e := testkit.New(t)
+	org := e.Org("acme")
+	dir := t.TempDir()
+	h := e.Handler(testkit.Store(storage.NewDisk(dir)))
+	tina := e.Contact(org, testkit.Kind("tenant")).ID
+	lease := e.Lease(org, e.Property(org).ID, tina)
+	tenant := e.Login(e.PortalUser("tina@example.com", org, auth.Tenant, tina), h)
+	tk := e.Ticket(org, property.NewTicket{LeaseID: &lease.ID, ContactID: &tina}, "completed", "")
+	before := e.Count("files", "true")
+	rr := tenant.Upload(fmt.Sprintf("/api/v1/portal/acme/maintenance/%d/files", tk.ID), "late.png", testkit.PNG)
+	if rr.Code != http.StatusConflict {
+		t.Fatalf("status %d %s", rr.Code, rr.Body)
+	}
+	if n := e.Count("files", "true"); n != before {
+		t.Fatalf("files rows %d -> %d", before, n)
+	}
+	blobs, _ := os.ReadDir(filepath.Join(dir, strconv.FormatInt(org.ID, 10)))
+	if len(blobs) != 0 {
+		t.Fatalf("bytes left on disk: %v", blobs)
 	}
 }

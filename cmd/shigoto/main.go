@@ -224,6 +224,9 @@ func serve() error {
 		Addr:              cfg.Listen,
 		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
+		// No ReadTimeout: large uploads take as long as they take. Upload
+		// handlers instead bound silence per read (module.withIdleDeadline).
+		IdleTimeout: 120 * time.Second,
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)

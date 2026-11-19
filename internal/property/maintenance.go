@@ -359,6 +359,15 @@ func AssignSupplier(ctx context.Context, tx core.Querier, orgID, id, userID, sup
 	if t.Terminal() {
 		return Ticket{}, core.ErrInvalidState
 	}
+	if t.SupplierContactID != nil && *t.SupplierContactID != supplierID {
+		// Entry consent and the tenant's confirmation were given for the
+		// booked tradesperson: cancel the visit before changing who goes.
+		if open, err := OpenVisit(ctx, tx, orgID, id); err != nil {
+			return Ticket{}, err
+		} else if open != nil {
+			return Ticket{}, core.ErrInvalidState
+		}
+	}
 	var kind, name string
 	err = tx.QueryRow(ctx, `SELECT kind, name FROM contacts WHERE org_id = $1 AND id = $2`, orgID, supplierID).Scan(&kind, &name)
 	if errors.Is(err, pgx.ErrNoRows) || (err == nil && kind != "supplier") {
@@ -506,18 +515,6 @@ func SavePendingFile(ctx context.Context, tx core.Querier, orgID, userID int64, 
 	err := tx.QueryRow(ctx, `INSERT INTO maintenance_pending_files (org_id, file_id, user_id) VALUES ($1, $2, $3) RETURNING id`,
 		orgID, f.ID, userID).Scan(&id)
 	return id, err
-}
-
-// DeletePendingFile removes userID's own pending upload, or core.ErrNotFound.
-func DeletePendingFile(ctx context.Context, tx core.Querier, orgID, userID, pendingID int64) error {
-	tag, err := tx.Exec(ctx, `DELETE FROM maintenance_pending_files WHERE org_id = $1 AND user_id = $2 AND id = $3`, orgID, userID, pendingID)
-	if err != nil {
-		return err
-	}
-	if tag.RowsAffected() == 0 {
-		return core.ErrNotFound
-	}
-	return nil
 }
 
 // ListTicketEvents returns the ticket's timeline, oldest first; with

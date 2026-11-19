@@ -101,77 +101,97 @@ func (l *limitedHashWriter) Write(p []byte) (int, error) {
 	return n, err
 }
 
-// SaveFile streams r into store and records it in files. It sniffs the MIME
-// type from the first 512 bytes and rejects a type pol does not allow with
-// ErrInvalidInput (422) before reading any further; content larger than
-// pol.MaxBytes gives ErrTooLarge (413). The whole file is never held in
-// memory. If an (org_id, sha256) row already exists - including a
-// concurrent upload of the same content - the existing row is returned and
-// the existing blob is kept.
-//
-// A read error from r (for example *http.MaxBytesError from a capped
-// request body) is returned wrapped, so callers can still detect it.
-func SaveFile(ctx context.Context, q Querier, store storage.Store, orgID int64, name string, r io.Reader, pol UploadPolicy) (File, error) {
+// Staged is an upload streamed into the store's staging area but not yet
+// recorded: StageFile reads the body with no database work, so a slow
+// client never holds a connection or transaction. Call Save inside a short
+// transaction, then Commit after it commits (or Abort on any failure).
+type Staged struct {
+	OrgID   int64
+	Name    string
+	MIME    string
+	Size    int64
+	SHA256  []byte
+	pending storage.Pending
+}
+
+// StageFile sniffs r's MIME type from its first 512 bytes, rejecting a type
+// pol does not allow with ErrInvalidInput before reading further, then
+// streams the rest into store, failing with ErrTooLarge past pol.MaxBytes.
+// On error nothing is left behind. A read error from r (for example
+// *http.MaxBytesError) is returned wrapped.
+func StageFile(ctx context.Context, store storage.Store, orgID int64, name string, r io.Reader, pol UploadPolicy) (*Staged, error) {
 	head := make([]byte, 512)
 	n, err := io.ReadFull(r, head)
 	if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) && !errors.Is(err, io.EOF) {
-		return File{}, err
+		return nil, err
 	}
 	head = head[:n]
 	mime := SniffMIME(head)
 	if !pol.Allowed[mime] {
-		return File{}, fmt.Errorf("%w: unsupported file type %q", ErrInvalidInput, mime)
+		return nil, fmt.Errorf("%w: unsupported file type %q", ErrInvalidInput, mime)
 	}
-
 	pending, err := store.Begin(ctx, orgID)
 	if err != nil {
-		return File{}, err
+		return nil, err
 	}
-	committed := false
-	defer func() {
-		if !committed {
-			_ = pending.Abort()
-		}
-	}()
-
 	w := &limitedHashWriter{w: pending, h: sha256.New(), max: pol.MaxBytes}
 	if _, err := w.Write(head); err != nil {
-		return File{}, err
+		_ = pending.Abort()
+		return nil, err
 	}
 	if _, err := io.Copy(w, r); err != nil {
-		return File{}, err
+		_ = pending.Abort()
+		return nil, err
 	}
-	sum := w.h.Sum(nil)
-
 	if name == "" {
 		name = "receipt"
 	}
-	// ON CONFLICT DO NOTHING (rather than catching the unique_violation
-	// after the fact) avoids aborting the caller's transaction: a plain
-	// insert that hits the constraint would leave the transaction unable
-	// to run the follow-up GetFileByHash lookup below.
+	return &Staged{OrgID: orgID, Name: name, MIME: mime, Size: w.n, SHA256: w.h.Sum(nil), pending: pending}, nil
+}
+
+// Save records the staged file in files. If an (org_id, sha256) row
+// already exists - including a concurrent upload of the same content - the
+// existing row is returned. ON CONFLICT DO NOTHING (rather than catching
+// the unique_violation) keeps the caller's transaction usable for the
+// follow-up lookup.
+func (s *Staged) Save(ctx context.Context, q Querier) (File, error) {
 	row := q.QueryRow(ctx, `
 		INSERT INTO files (org_id, sha256, mime, size_bytes, original_name)
 		VALUES ($1, $2, $3, $4, $5)
 		ON CONFLICT (org_id, sha256) DO NOTHING
 		RETURNING `+fileColumns,
-		orgID, sum, mime, w.n, name,
+		s.OrgID, s.SHA256, s.MIME, s.Size, s.Name,
 	)
 	created, err := scanFile(row)
 	if errors.Is(err, pgx.ErrNoRows) {
-		created, err = GetFileByHash(ctx, q, orgID, sum)
+		return GetFileByHash(ctx, q, s.OrgID, s.SHA256)
 	}
+	return created, err
+}
+
+// Commit moves the staged bytes into place under their content key (a
+// no-op if that blob already exists).
+func (s *Staged) Commit(ctx context.Context) error {
+	return s.pending.Commit(ctx, storage.Key{OrgID: s.OrgID, SHA256: s.SHA256})
+}
+
+// Abort discards the staged bytes.
+func (s *Staged) Abort() error { return s.pending.Abort() }
+
+// SaveFile stages r, records it with q and commits the blob: StageFile,
+// Save and Commit in one call, for callers whose q is not a long-lived
+// transaction (tests, imports).
+func SaveFile(ctx context.Context, q Querier, store storage.Store, orgID int64, name string, r io.Reader, pol UploadPolicy) (File, error) {
+	staged, err := StageFile(ctx, store, orgID, name, r, pol)
 	if err != nil {
 		return File{}, err
 	}
-	// The blob is content addressed, so committing it is safe even if the
-	// caller's transaction later rolls back: an orphan blob is harmless and
-	// is reused by the next upload of the same bytes.
-	committed = true
-	if err := pending.Commit(ctx, created.Key()); err != nil {
+	f, err := staged.Save(ctx, q)
+	if err != nil {
+		_ = staged.Abort()
 		return File{}, err
 	}
-	return created, nil
+	return f, staged.Commit(ctx)
 }
 
 // OpenFile opens f's bytes from store.

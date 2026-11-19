@@ -235,3 +235,35 @@ func TestLeaseHasContactCoTenant(t *testing.T) {
 		}
 	}
 }
+
+// A payment made on the write-off day before the write-off was already
+// counted in the written-off amount: it is not a recovery.
+func TestAccountSameDayPaymentThenWriteOff(t *testing.T) {
+	f := newAccountFixture(t)
+	f.pay(t, f.invoices[0], 20000, "2026-11-20")
+	if _, err := core.MarkInvoiceUncollectible(f.e.Ctx, f.e.Pool, f.org.ID, f.invoices[0], testkit.Date("2026-11-20")); err != nil {
+		t.Fatal(err)
+	}
+	a := f.account(t)
+	for _, e := range a.Entries {
+		if e.Kind == property.EntryWriteOffReversed {
+			t.Fatalf("phantom reversal: %+v", e)
+		}
+	}
+	if a.Balance != 124000 {
+		t.Fatalf("Balance = %d, want 124000 (invoice 1 settled by payment + write-off)", a.Balance)
+	}
+}
+
+// A payment recorded after the write-off but backdated before it still
+// recovers the written-off debt.
+func TestAccountBackdatedPaymentAfterWriteOff(t *testing.T) {
+	f := newAccountFixture(t)
+	if _, err := core.MarkInvoiceUncollectible(f.e.Ctx, f.e.Pool, f.org.ID, f.invoices[0], testkit.Date("2026-11-20")); err != nil {
+		t.Fatal(err)
+	}
+	f.pay(t, f.invoices[0], 62000, "2026-11-10")
+	if a := f.account(t); a.Balance != 124000 {
+		t.Fatalf("Balance = %d, want 124000", a.Balance)
+	}
+}

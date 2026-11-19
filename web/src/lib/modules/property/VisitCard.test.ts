@@ -50,4 +50,11 @@ describe('VisitCard', () => {
 		render(VisitCard, { visit: visit({ status: 'change_requested', change_note: 'Working' }), preference: null, apiBase: base, onchanged: vi.fn() });
 		expect(screen.getByText('Change requested — waiting for your property manager')).toBeTruthy();
 	});
+
+	it('lets the tenant allow entry again after withdrawing it', async () => {
+		mockApi({ [`POST ${base}/visits/3/confirm`]: visit({ status: 'confirmed', entry_state: 'permitted' }) });
+		render(VisitCard, { visit: visit({ status: 'confirmed', entry_state: 'withdrawn' }), preference: null, apiBase: base, onchanged: vi.fn() });
+		await fireEvent.click(screen.getByRole('button', { name: 'Allow entry again' }));
+		await vi.waitFor(() => expect(apiMock).toHaveBeenCalledWith('POST', `${base}/visits/3/confirm`, { entry_mode: 'permitted' }));
+	});
 });

@@ -17,7 +17,10 @@ function meWithOrgs(orgs: { slug: string; name: string; role: string; portal?: b
 	};
 }
 
-beforeEach(() => setPage({ params: { org: 'acme' }, url: new URL('http://localhost/portal/acme/invoices') }));
+beforeEach(() => {
+	setPage({ params: { org: 'acme' }, url: new URL('http://localhost/portal/acme/invoices') });
+	session.setModules(['property', 'timesheets', 'reconciliation']);
+});
 
 describe('portal layout', () => {
 	it('offers skip navigation and identifies the current portal section without staff links', () => {
@@ -79,5 +82,14 @@ describe('portal layout', () => {
 		render(Layout, { children: childSnippet() });
 		expect(screen.queryByRole('link', { name: 'Rent' })).toBeNull();
 		expect(screen.queryByRole('link', { name: 'Repairs' })).toBeNull();
+	});
+
+	it('hides Rent and Repairs when the property module is off', () => {
+		session.setMe(meWithOrgs([{ slug: 'acme', name: 'Acme', role: 'tenant', portal: true }]));
+		session.setModules(['timesheets']);
+		render(Layout, { children: childSnippet() });
+		expect(screen.queryByRole('link', { name: 'Rent' })).toBeNull();
+		expect(screen.queryByRole('link', { name: 'Repairs' })).toBeNull();
+		expect(screen.getByRole('link', { name: 'Invoices' })).toBeTruthy();
 	});
 });
