@@ -48,3 +48,8 @@ cases:
     as: tenant
     request: {method: GET, path: "/api/v1/portal/acme/leases/{lease}/statement.pdf"}
     expect: {status: 404, body: {error: not found}, exact: true}
+
+  - name: portal repairs are gone when property is disabled
+    as: tenant
+    request: {method: GET, path: /api/v1/portal/acme/maintenance}
+    expect: {status: 404, body: {error: not found}, exact: true}

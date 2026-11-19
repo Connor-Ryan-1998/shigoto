@@ -52,6 +52,7 @@ type Seed struct {
 	Properties map[string]SeedProperty `yaml:"properties"`
 	Leases     map[string]SeedLease    `yaml:"leases"`
 	Payments   map[string]SeedPayment  `yaml:"payments"`
+	Tickets    map[string]SeedTicket   `yaml:"tickets"`
 	Projects   map[string]SeedProject  `yaml:"projects"`
 	Tasks      map[string]SeedTask     `yaml:"tasks"`
 	Invites    map[string]SeedInvite   `yaml:"invites"`
@@ -102,6 +103,20 @@ type SeedLease struct {
 	CoTenants []string `yaml:"co_tenants"`
 	Rent      int64    `yaml:"rent"`
 	RentRun   bool     `yaml:"rent_run"`
+	// Terminated (YYYY-MM-DD) sets the lease's termination date.
+	Terminated string `yaml:"terminated"`
+}
+
+// SeedTicket is a maintenance ticket on the seed lease Lease raised by the
+// seed contact RaisedBy (a tenant on it). Status (default new) is set
+// directly; Note adds a staff-only note.
+type SeedTicket struct {
+	Org      string `yaml:"org"`
+	Lease    string `yaml:"lease"`
+	RaisedBy string `yaml:"raised_by"`
+	Title    string `yaml:"title"`
+	Status   string `yaml:"status"`
+	Note     string `yaml:"note"`
 }
 
 // SeedPayment is a bank-transfer payment of Amount against the Period-th
@@ -142,8 +157,9 @@ type SeedInvite struct {
 
 // SeedSettings sets org flags directly.
 type SeedSettings struct {
-	GSTRegistered bool `yaml:"gst_registered"`
-	PayOptions    bool `yaml:"pay_options"`
+	GSTRegistered  bool   `yaml:"gst_registered"`
+	PayOptions     bool   `yaml:"pay_options"`
+	EmergencyPhone string `yaml:"emergency_phone"`
 }
 
 // Case is one request, run once per actor in As.
@@ -241,6 +257,7 @@ func (s Seed) seedNames() map[string]string {
 	add("properties", sortedKeys(s.Properties))
 	add("leases", sortedKeys(s.Leases))
 	add("payments", sortedKeys(s.Payments))
+	add("tickets", sortedKeys(s.Tickets))
 	add("projects", sortedKeys(s.Projects))
 	add("tasks", sortedKeys(s.Tasks))
 	add("invites", sortedKeys(s.Invites))
@@ -290,6 +307,7 @@ func (f File) Validate() error {
 		{"properties", sortedKeys(s.Properties)},
 		{"leases", sortedKeys(s.Leases)},
 		{"payments", sortedKeys(s.Payments)},
+		{"tickets", sortedKeys(s.Tickets)},
 		{"projects", sortedKeys(s.Projects)},
 		{"tasks", sortedKeys(s.Tasks)},
 		{"invites", sortedKeys(s.Invites)},
@@ -385,6 +403,20 @@ func (f File) Validate() error {
 		}
 		if p.Amount <= 0 || p.Period < 0 {
 			seedErr("%s: amount must be positive and period non-negative", where)
+		}
+	}
+	for _, name := range sortedKeys(s.Tickets) {
+		tk := s.Tickets[name]
+		where := "tickets." + name
+		checkOrg(where, tk.Org)
+		if l, ok := s.Leases[tk.Lease]; !ok || l.Org != tk.Org {
+			seedErr("%s: lease: unknown lease %q in org %q", where, tk.Lease, tk.Org)
+		}
+		checkContact(where, "raised_by", tk.RaisedBy, tk.Org)
+		switch tk.Status {
+		case "", "new", "viewed", "assigned", "scheduled", "completed", "cancelled":
+		default:
+			seedErr("%s: unknown status %q", where, tk.Status)
 		}
 	}
 	for _, name := range sortedKeys(s.Projects) {

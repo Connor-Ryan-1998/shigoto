@@ -1,0 +1,130 @@
+# Portal repair tickets.
+#
+# Tenants raise and follow tickets on leases they are listed on; co-tenants
+# share them. Staff-only notes never appear in any portal response (the
+# SENTINEL string is checked with exact bodies). Anyone else gets a bare 404.
+seed:
+  orgs: [acme, beta]
+  users:
+    owner: {org: acme, role: owner}
+    tenant_a: {org: acme, role: tenant, contact: c_a}
+    co_tenant: {org: acme, role: tenant, contact: c_co}
+    tenant_b: {org: acme, role: tenant, contact: c_b}
+    client: {org: acme, role: client, contact: c_client}
+    beta_tenant: {org: beta, role: tenant, contact: c_beta}
+  contacts:
+    c_a: {org: acme, kind: tenant, name: Tenant A}
+    c_co: {org: acme, kind: tenant, name: Co Tenant}
+    c_b: {org: acme, kind: tenant, name: Tenant B}
+    c_client: {org: acme, kind: client, name: Client}
+    c_beta: {org: beta, kind: tenant, name: Beta Tenant}
+    c_supplier: {org: acme, kind: supplier, name: Fitzroy Plumbing}
+  properties:
+    prop: {org: acme}
+    prop_b: {org: acme}
+    ended_prop: {org: acme}
+    beta_prop: {org: beta}
+  leases:
+    lease_a: {org: acme, property: prop, tenant: c_a, co_tenants: [c_co]}
+    lease_b: {org: acme, property: prop_b, tenant: c_b}
+    ended_lease: {org: acme, property: ended_prop, tenant: c_a, terminated: "2026-02-01"}
+    beta_lease: {org: beta, property: beta_prop, tenant: c_beta}
+  tickets:
+    ticket_a: {org: acme, lease: lease_a, raised_by: c_a, title: Tap leaking, note: SENTINEL-INTERNAL}
+    ticket_b: {org: acme, lease: lease_b, raised_by: c_b, title: Blind broken}
+    ticket_assigned: {org: acme, lease: lease_a, raised_by: c_a, title: Oven, status: assigned}
+  settings:
+    acme: {emergency_phone: "0400 123 456"}
+
+cases:
+  - name: tenant lists their lease's tickets with the emergency phone
+    as: [tenant_a, co_tenant]
+    request: {method: GET, path: /api/v1/portal/acme/maintenance}
+    expect:
+      status: 200
+      body:
+        emergency_phone: "0400 123 456"
+        tickets: [{id: "{ticket_assigned}"}, {id: "{ticket_a}"}]
+
+  - name: tenant raises a ticket on their active lease
+    as: [tenant_a, co_tenant]
+    isolate: true
+    request:
+      method: POST
+      path: /api/v1/portal/acme/maintenance
+      body: {lease_id: "{lease_a}", title: Door sticks, description: Front door sticks, category: doors_windows_locks, urgency: routine, access_notes: Dog in yard}
+    expect: {status: 201, body: {status: new, ref: R-0004, lease_id: "{lease_a}", title: Door sticks}}
+
+  - name: tenant cannot raise a ticket on someone else's lease
+    as: tenant_a
+    request:
+      method: POST
+      path: /api/v1/portal/acme/maintenance
+      body: {lease_id: "{lease_b}", title: X, description: Y, category: other, urgency: routine}
+    expect: {status: 404, body: {error: not found}, exact: true}
+    unchanged: [maintenance_tickets]
+
+  - name: tenant cannot raise a ticket on an ended lease
+    as: tenant_a
+    request:
+      method: POST
+      path: /api/v1/portal/acme/maintenance
+      body: {lease_id: "{ended_lease}", title: X, description: Y, category: other, urgency: routine}
+    expect: {status: 422, body: {error: "invalid input: lease is not active"}, exact: true}
+    unchanged: [maintenance_tickets]
+
+  - name: invalid category is rejected
+    as: tenant_a
+    request:
+      method: POST
+      path: /api/v1/portal/acme/maintenance
+      body: {lease_id: "{lease_a}", title: X, description: Y, category: roof, urgency: routine}
+    expect: {status: 422}
+
+  - name: tenant reads their ticket without staff notes
+    as: [tenant_a, co_tenant]
+    request: {method: GET, path: "/api/v1/portal/acme/maintenance/{ticket_a}"}
+    expect:
+      status: 200
+      body:
+        ticket: {id: "{ticket_a}", status: new}
+        events: [{kind: created}]
+
+  - name: tenant cannot read a neighbour's ticket
+    as: [tenant_a, client, beta_tenant]
+    request: {method: GET, path: "/api/v1/portal/acme/maintenance/{ticket_b}"}
+    expect: {status: 404, body: {error: not found}, exact: true}
+
+  - name: clients have no repairs
+    as: client
+    request: {method: GET, path: /api/v1/portal/acme/maintenance}
+    expect: {status: 404, body: {error: not found}, exact: true}
+
+  - name: tenant comments on their ticket
+    as: co_tenant
+    isolate: true
+    request: {method: POST, path: "/api/v1/portal/acme/maintenance/{ticket_a}/comments", body: {body: Thanks!}}
+    expect: {status: 201, body: {kind: comment, body: Thanks!}}
+
+  - name: tenant cannot comment on a neighbour's ticket
+    as: tenant_a
+    request: {method: POST, path: "/api/v1/portal/acme/maintenance/{ticket_b}/comments", body: {body: hi}}
+    expect: {status: 404, body: {error: not found}, exact: true}
+    unchanged: [maintenance_events]
+
+  - name: tenant cancels a new ticket
+    as: tenant_a
+    isolate: true
+    request: {method: POST, path: "/api/v1/portal/acme/maintenance/{ticket_a}/cancel", body: {reason: Fixed it myself}}
+    expect: {status: 200, body: {status: cancelled, cancel_reason: Fixed it myself}}
+
+  - name: tenant cannot cancel an assigned ticket
+    as: tenant_a
+    request: {method: POST, path: "/api/v1/portal/acme/maintenance/{ticket_assigned}/cancel", body: {reason: x}}
+    expect: {status: 409}
+    unchanged: [maintenance_tickets]
+
+  - name: deleting someone else's pending upload is not found
+    as: tenant_a
+    request: {method: DELETE, path: /api/v1/portal/acme/maintenance/uploads/999999}
+    expect: {status: 404, body: {error: not found}, exact: true}

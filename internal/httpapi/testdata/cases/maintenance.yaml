@@ -1,0 +1,106 @@
+# Staff repair tickets on the property module.
+#
+# Reading needs property_read (bookkeepers included); every change needs
+# property_write. Only property_write staff mark a ticket viewed, so a
+# bookkeeper opening it doesn't tell the tenant it was seen.
+seed:
+  orgs: [acme, beta]
+  users:
+    owner: {org: acme, role: owner}
+    staff: {org: acme, role: staff}
+    bookkeeper: {org: acme, role: bookkeeper}
+    tenant_a: {org: acme, role: tenant, contact: c_a}
+    beta_owner: {org: beta, role: owner}
+  contacts:
+    c_a: {org: acme, kind: tenant, name: Tenant A, email: a@example.com}
+    c_supplier: {org: acme, kind: supplier, name: Fitzroy Plumbing}
+    c_client: {org: acme, kind: client, name: Client}
+  properties:
+    prop: {org: acme}
+    other_prop: {org: acme}
+  leases:
+    lease_a: {org: acme, property: prop, tenant: c_a}
+  tickets:
+    ticket_a: {org: acme, lease: lease_a, raised_by: c_a, title: Tap leaking, note: Internal note}
+    ticket_done: {org: acme, lease: lease_a, raised_by: c_a, title: Old, status: completed}
+
+cases:
+  - name: staff list open tickets on the property
+    as: [owner, staff, bookkeeper]
+    request: {method: GET, path: "/api/v1/orgs/acme/properties/{prop}/maintenance"}
+    expect: {status: 200, body: [{id: "{ticket_a}", ref: R-0001, raised_by_name: Tenant A}]}
+
+  - name: all tickets include closed ones
+    as: owner
+    request: {method: GET, path: "/api/v1/orgs/acme/properties/{prop}/maintenance?status=all"}
+    expect: {status: 200, body: [{id: "{ticket_a}"}, {id: "{ticket_done}"}]}
+
+  - name: staff read the ticket with tenants and internal notes
+    as: [owner, bookkeeper]
+    request: {method: GET, path: "/api/v1/orgs/acme/maintenance/{ticket_a}"}
+    expect:
+      status: 200
+      body:
+        ticket: {id: "{ticket_a}", status: new}
+        tenants: [{name: Tenant A, email: a@example.com}]
+        events: [{kind: created}, {kind: note, body: Internal note, tenant_visible: false}]
+
+  - name: staff marks a ticket viewed
+    as: [owner, staff]
+    isolate: true
+    request: {method: POST, path: "/api/v1/orgs/acme/maintenance/{ticket_a}/viewed"}
+    expect: {status: 200, body: {status: viewed}}
+
+  - name: bookkeepers cannot mark viewed or change tickets
+    as: bookkeeper
+    request: {method: POST, path: "/api/v1/orgs/acme/maintenance/{ticket_a}/viewed"}
+    expect: {status: 403, body: {error: forbidden}, exact: true}
+    unchanged: [maintenance_tickets, maintenance_events]
+
+  - name: staff assigns a supplier
+    as: owner
+    isolate: true
+    request: {method: PUT, path: "/api/v1/orgs/acme/maintenance/{ticket_a}/supplier", body: {supplier_contact_id: "{c_supplier}"}}
+    expect: {status: 200, body: {status: assigned, supplier: {id: "{c_supplier}", name: Fitzroy Plumbing}}}
+
+  - name: a client contact cannot be the supplier
+    as: owner
+    request: {method: PUT, path: "/api/v1/orgs/acme/maintenance/{ticket_a}/supplier", body: {supplier_contact_id: "{c_client}"}}
+    expect: {status: 422}
+    unchanged: [maintenance_tickets]
+
+  - name: staff completes a ticket
+    as: owner
+    isolate: true
+    request: {method: POST, path: "/api/v1/orgs/acme/maintenance/{ticket_a}/complete", body: {note: Washer replaced}}
+    expect: {status: 200, body: {status: completed}}
+
+  - name: a closed ticket cannot be completed again
+    as: owner
+    request: {method: POST, path: "/api/v1/orgs/acme/maintenance/{ticket_done}/complete", body: {}}
+    expect: {status: 409}
+
+  - name: staff adds an internal note
+    as: staff
+    isolate: true
+    request: {method: POST, path: "/api/v1/orgs/acme/maintenance/{ticket_a}/events", body: {kind: note, body: Called plumber}}
+    expect: {status: 201, body: {kind: note, tenant_visible: false}}
+
+  - name: staff raises a ticket on a property
+    as: owner
+    isolate: true
+    request:
+      method: POST
+      path: "/api/v1/orgs/acme/properties/{other_prop}/maintenance"
+      body: {title: Gutter, description: Clean gutters, category: garden_exterior, urgency: routine}
+    expect: {status: 201, body: {property_id: "{other_prop}", lease_id: null, status: new}}
+
+  - name: another org's ticket is not found
+    as: beta_owner
+    request: {method: GET, path: "/api/v1/orgs/beta/maintenance/{ticket_a}"}
+    expect: {status: 404}
+
+  - name: portal users cannot reach staff ticket routes
+    as: tenant_a
+    request: {method: GET, path: "/api/v1/orgs/acme/maintenance/{ticket_a}"}
+    expect: {status: 403, body: {error: forbidden}, exact: true}

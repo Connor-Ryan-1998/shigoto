@@ -14,6 +14,7 @@ import (
 	"shigoto/internal/auth"
 	"shigoto/internal/core"
 	"shigoto/internal/httpapi/casefile"
+	"shigoto/internal/property"
 	"shigoto/internal/testkit"
 )
 
@@ -89,6 +90,11 @@ func seedCaseWorld(t *testing.T, s casefile.Seed) *caseWorld {
 			opts = append(opts, testkit.PayOptions())
 		}
 		e.Settings(orgs[slug], opts...)
+		if st.EmergencyPhone != "" {
+			if _, err := e.Pool.Exec(e.Ctx, `UPDATE orgs SET emergency_phone = $1 WHERE id = $2`, st.EmergencyPhone, orgs[slug].ID); err != nil {
+				t.Fatalf("settings.%s: %v", slug, err)
+			}
+		}
 	}
 	for _, name := range sortedKeys(s.Contacts) {
 		c := s.Contacts[name]
@@ -140,6 +146,11 @@ func seedCaseWorld(t *testing.T, s casefile.Seed) *caseWorld {
 		}
 		lease := e.Lease(orgs[l.Org], ids[l.Property], ids[l.Tenant], opts...)
 		ids[name] = lease.ID
+		if l.Terminated != "" {
+			if _, err := e.Pool.Exec(e.Ctx, `UPDATE leases SET termination_date = $1 WHERE id = $2`, l.Terminated, lease.ID); err != nil {
+				t.Fatalf("leases.%s: terminating: %v", name, err)
+			}
+		}
 		if l.RentRun {
 			leaseInvoices[name] = e.IssueRent(orgs[l.Org], lease)
 		}
@@ -151,6 +162,12 @@ func seedCaseWorld(t *testing.T, s casefile.Seed) *caseWorld {
 			t.Fatalf("payments.%s: lease %q has %d rent invoices", name, p.Lease, len(invoices))
 		}
 		ids[name] = e.Payment(orgs[p.Org], invoices[p.Period], core.Cents(p.Amount), testkit.Date("2026-01-06"))
+	}
+	for _, name := range sortedKeys(s.Tickets) {
+		tk := s.Tickets[name]
+		lease := ids[tk.Lease]
+		contact := ids[tk.RaisedBy]
+		ids[name] = e.Ticket(orgs[tk.Org], property.NewTicket{LeaseID: &lease, ContactID: &contact, Title: tk.Title}, tk.Status, tk.Note).ID
 	}
 	for _, name := range sortedKeys(s.Projects) {
 		p := s.Projects[name]

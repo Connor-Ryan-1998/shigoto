@@ -3,6 +3,7 @@
 package testkit
 
 import (
+	"fmt"
 	"time"
 
 	"shigoto/internal/billing"
@@ -267,6 +268,54 @@ func (e *Env) Payment(org core.Org, invoiceID int64, amount core.Cents, paidOn t
 		return 0
 	}
 	return p.ID
+}
+
+// Ticket creates a maintenance ticket from in, filling defaults: the
+// lease's property (or in.PropertyID), title "Leaking tap", a plumbing
+// routine description, and a staff-free raiser. status (when not "" or
+// "new") is set directly; note adds a staff-only note.
+func (e *Env) Ticket(org core.Org, in property.NewTicket, status, note string) property.Ticket {
+	e.T.Helper()
+	if in.LeaseID != nil && in.PropertyID == 0 {
+		l, err := property.GetLease(e.Ctx, e.Pool, org.ID, *in.LeaseID)
+		if err != nil {
+			e.T.Fatalf("ticket lease: %v", err)
+		}
+		in.PropertyID = l.PropertyID
+	}
+	if in.UserID == 0 {
+		u := e.User(fmt.Sprintf("raiser-%d-%d@example.com", org.ID, time.Now().UnixNano()))
+		in.UserID = u.ID
+	}
+	if in.Title == "" {
+		in.Title = "Leaking tap"
+	}
+	if in.Description == "" {
+		in.Description = "Water under the sink."
+	}
+	if in.Category == "" {
+		in.Category = "plumbing"
+	}
+	if in.Urgency == "" {
+		in.Urgency = "routine"
+	}
+	tk, err := property.CreateTicket(e.Ctx, e.Pool, org.ID, in, property.TodayIn(time.UTC))
+	if err != nil {
+		e.T.Fatalf("creating ticket: %v", err)
+		return property.Ticket{}
+	}
+	if status != "" && status != "new" {
+		if _, err := e.Pool.Exec(e.Ctx, `UPDATE maintenance_tickets SET status = $1 WHERE id = $2`, status, tk.ID); err != nil {
+			e.T.Fatalf("ticket status: %v", err)
+		}
+	}
+	if note != "" {
+		if _, err := property.AddTicketEvent(e.Ctx, e.Pool, org.ID, tk.ID, property.TicketEvent{Kind: "note", Body: note}); err != nil {
+			e.T.Fatalf("ticket note: %v", err)
+		}
+	}
+	tk, _ = property.GetTicket(e.Ctx, e.Pool, org.ID, tk.ID)
+	return tk
 }
 
 // --- timesheets ---
