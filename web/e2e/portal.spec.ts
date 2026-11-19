@@ -143,3 +143,86 @@ test('tenant signs in by magic link and sees only their own invoice', async ({ p
 	await expect(page).toHaveURL(new RegExp(`${base}/login(?:\\?|$)`));
 	await expect(page.getByRole('dialog', { name: 'Session expired' })).not.toBeVisible();
 });
+
+test('tenants see the shared rent ledger, receipts and statements', async ({ page, browser }) => {
+	const cookie = await stack.login(ownerEmail, password);
+	const primaryEmail = `rent-primary-${runID}@example.com`;
+	const coEmail = `rent-co-${runID}@example.com`;
+	const strangerEmail = `rent-stranger-${runID}@example.com`;
+	const contact = (email: string) =>
+		stack.api<{ id: number }>(cookie, 'POST', '/api/v1/orgs/org-a/contacts', { kind: 'tenant', name: `Tenant ${email}`, email });
+	const [primary, co, stranger] = [await contact(primaryEmail), await contact(coEmail), await contact(strangerEmail)];
+	// Rent invoices need two payment options before they can be issued.
+	await stack.api(cookie, 'PUT', '/api/v1/orgs/org-a/settings', {
+		name: 'Alpha Pty Ltd', bank_bsb: '062-000', bank_account: '12345678', payid: '0412345678',
+		invoice_lead_days: 7, auto_send_rent: false
+	});
+
+	const property = await stack.api<{ id: number }>(cookie, 'POST', '/api/v1/orgs/org-a/properties', {
+		name: `Rent ${runID}`,
+		address: `12 Banksia St ${runID}`
+	});
+	const today = new Date().toISOString().slice(0, 10);
+	const lease = await stack.api<{ id: number }>(cookie, 'POST', '/api/v1/orgs/org-a/leases', {
+		property_id: property.id,
+		tenants: [
+			{ contact_id: primary.id, primary: true },
+			{ contact_id: co.id, primary: false }
+		],
+		start_date: today,
+		frequency: 'weekly',
+		rent_amount: 62000
+	});
+	await stack.api(cookie, 'POST', '/api/v1/orgs/org-a/rent-run');
+	const ledger = await stack.api<{ periods: { invoice_id?: number }[] }>(cookie, 'GET', `/api/v1/orgs/org-a/leases/${lease.id}/ledger`);
+	const first = ledger.periods[0].invoice_id!;
+	await stack.api(cookie, 'POST', `/api/v1/orgs/org-a/invoices/${first}/issue`);
+	await stack.api(cookie, 'POST', `/api/v1/orgs/org-a/invoices/${first}/payments`, { amount: 62000, paid_on: today, method: 'bank_transfer' });
+
+	for (const c of [primary, co, stranger]) {
+		await stack.api(cookie, 'POST', `/api/v1/orgs/org-a/contacts/${c.id}/portal-invite`);
+	}
+
+	// Primary tenant: Rent tab, ledger, receipt and statement downloads.
+	await page.goto(await waitForMagicLink(primaryEmail));
+	await page.getByRole('link', { name: 'Rent', exact: true }).click();
+	await expect(page).toHaveURL(`${base}/portal/org-a/rent`);
+	await expect(page.getByText('Paid to')).toBeVisible();
+	await expect(page.getByText('Payment · Bank transfer')).toBeVisible();
+
+	const pdf = page.waitForEvent('download');
+	await page.getByRole('link', { name: 'Download PDF' }).click();
+	const pdfFile = await pdf;
+	expect(pdfFile.suggestedFilename()).toMatch(/^rent-statement-.*\.pdf$/);
+	const { readFileSync } = await import('node:fs');
+	expect(readFileSync((await pdfFile.path())!).subarray(0, 5).toString()).toBe('%PDF-');
+
+	const csv = page.waitForEvent('download');
+	await page.getByRole('link', { name: 'Download CSV' }).click();
+	expect((await csv).suggestedFilename()).toMatch(/\.csv$/);
+
+	await page.getByRole('link', { name: /^Receipt/ }).click();
+	await expect(page.getByRole('heading', { name: 'Payment receipt' }).first()).toBeVisible();
+	await expect(page.getByText('Bank transfer')).toBeVisible();
+
+	// Co-tenant sees the same payment.
+	const coContext = await browser.newContext();
+	const coPage = await coContext.newPage();
+	await coPage.goto(await waitForMagicLink(coEmail));
+	await expect(coPage).toHaveURL(new RegExp(`${base}/portal/org-a/`));
+	await coPage.goto(`${base}/portal/org-a/rent`);
+	await expect(coPage.getByText('Payment · Bank transfer')).toBeVisible();
+	await coContext.close();
+
+	// A tenant not on the lease cannot read its receipt.
+	const strangerContext = await browser.newContext();
+	const strangerPage = await strangerContext.newPage();
+	await strangerPage.goto(await waitForMagicLink(strangerEmail));
+	await expect(strangerPage).toHaveURL(new RegExp(`${base}/portal/org-a/`));
+	await strangerPage.goto(`${base}/portal/org-a/rent`);
+	await expect(strangerPage.getByText('No leases yet')).toBeVisible();
+	const receiptPath = new URL(page.url()).pathname;
+	await strangerPage.goto(`${base}${receiptPath}`);
+	await expect(strangerPage.getByText("Couldn't load the receipt")).toBeVisible();
+	await strangerContext.close();
+});
