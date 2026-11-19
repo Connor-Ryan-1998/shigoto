@@ -33,6 +33,7 @@ seed:
     ticket_a: {org: acme, lease: lease_a, raised_by: c_a, title: Tap leaking, note: SENTINEL-INTERNAL}
     ticket_b: {org: acme, lease: lease_b, raised_by: c_b, title: Blind broken}
     ticket_assigned: {org: acme, lease: lease_a, raised_by: c_a, title: Oven, status: assigned}
+    ticket_visit: {org: acme, lease: lease_a, raised_by: c_a, title: Hot water, supplier: c_supplier, visit: true}
   settings:
     acme: {emergency_phone: "0400 123 456"}
 
@@ -44,7 +45,7 @@ cases:
       status: 200
       body:
         emergency_phone: "0400 123 456"
-        tickets: [{id: "{ticket_assigned}"}, {id: "{ticket_a}"}]
+        tickets: [{id: "{ticket_visit}"}, {id: "{ticket_assigned}"}, {id: "{ticket_a}"}]
 
   - name: tenant raises a ticket on their active lease
     as: [tenant_a, co_tenant]
@@ -53,7 +54,7 @@ cases:
       method: POST
       path: /api/v1/portal/acme/maintenance
       body: {lease_id: "{lease_a}", title: Door sticks, description: Front door sticks, category: doors_windows_locks, urgency: routine, access_notes: Dog in yard}
-    expect: {status: 201, body: {status: new, ref: R-0004, lease_id: "{lease_a}", title: Door sticks}}
+    expect: {status: 201, body: {status: new, ref: R-0005, lease_id: "{lease_a}", title: Door sticks}}
 
   - name: tenant cannot raise a ticket on someone else's lease
     as: tenant_a
@@ -128,3 +129,59 @@ cases:
     as: tenant_a
     request: {method: DELETE, path: /api/v1/portal/acme/maintenance/uploads/999999}
     expect: {status: 404, body: {error: not found}, exact: true}
+
+  - name: tenant sees the booked visit without staff-only detail
+    as: [tenant_a, co_tenant]
+    request: {method: GET, path: "/api/v1/portal/acme/maintenance/{ticket_visit}"}
+    expect: {status: 200, body: {open_visit: {id: "{ticket_visit_visit}", status: booked, entry_state: unconfirmed, supplier: {name: Fitzroy Plumbing}}}}
+
+  - name: tenant confirms the visit and grants entry
+    as: tenant_a
+    isolate: true
+    request: {method: POST, path: "/api/v1/portal/acme/maintenance/{ticket_visit}/visits/{ticket_visit_visit}/confirm", body: {entry_mode: permitted}}
+    expect: {status: 200, body: {status: confirmed, entry_state: permitted}}
+
+  - name: an unknown entry mode is rejected
+    as: tenant_a
+    request: {method: POST, path: "/api/v1/portal/acme/maintenance/{ticket_visit}/visits/{ticket_visit_visit}/confirm", body: {entry_mode: maybe}}
+    expect: {status: 422}
+    unchanged: [maintenance_visits]
+
+  - name: tenant asks for a different time
+    as: co_tenant
+    isolate: true
+    request: {method: POST, path: "/api/v1/portal/acme/maintenance/{ticket_visit}/visits/{ticket_visit_visit}/request-change", body: {note: Working that day, windows: [{date: "2030-01-09", slot: afternoon}]}}
+    expect: {status: 200, body: {status: change_requested, change_note: Working that day}}
+
+  - name: a neighbour cannot confirm the visit
+    as: tenant_b
+    request: {method: POST, path: "/api/v1/portal/acme/maintenance/{ticket_visit}/visits/{ticket_visit_visit}/confirm", body: {entry_mode: permitted}}
+    expect: {status: 404, body: {error: not found}, exact: true}
+    unchanged: [maintenance_visits]
+
+  - name: confirming a visit through another ticket is not found
+    as: tenant_a
+    request: {method: POST, path: "/api/v1/portal/acme/maintenance/{ticket_a}/visits/{ticket_visit_visit}/confirm", body: {entry_mode: permitted}}
+    expect: {status: 404, body: {error: not found}, exact: true}
+    unchanged: [maintenance_visits]
+
+  - name: tenant updates availability
+    as: tenant_a
+    isolate: true
+    request: {method: PUT, path: "/api/v1/portal/acme/maintenance/{ticket_a}/availability", body: {windows: [{date: "2030-01-09", slot: custom, start: "15:00", end: "17:00"}]}}
+    expect: {status: 200, body: {availability: [{date: "2030-01-09", slot: custom, start: "15:00", end: "17:00"}]}}
+
+  - name: tenant sets an entry preference
+    as: tenant_a
+    isolate: true
+    request: {method: PUT, path: "/api/v1/portal/acme/maintenance/{ticket_a}/entry-preference", body: {entry_preference: permitted}}
+    expect: {status: 200, body: {entry_preference: permitted}}
+
+  - name: tenant raises a ticket with availability and a preference
+    as: tenant_a
+    isolate: true
+    request:
+      method: POST
+      path: /api/v1/portal/acme/maintenance
+      body: {lease_id: "{lease_a}", title: Door, description: Sticks, category: other, urgency: routine, entry_preference: tenant_home, availability: [{date: "2030-01-09", slot: morning}]}
+    expect: {status: 201, body: {status: new}}

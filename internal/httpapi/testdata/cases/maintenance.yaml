@@ -23,17 +23,19 @@ seed:
   tickets:
     ticket_a: {org: acme, lease: lease_a, raised_by: c_a, title: Tap leaking, note: Internal note}
     ticket_done: {org: acme, lease: lease_a, raised_by: c_a, title: Old, status: completed}
+    ticket_sched: {org: acme, lease: lease_a, raised_by: c_a, title: Oven, supplier: c_supplier}
+    ticket_visit: {org: acme, lease: lease_a, raised_by: c_a, title: Hot water, supplier: c_supplier, visit: true}
 
 cases:
   - name: staff list open tickets on the property
     as: [owner, staff, bookkeeper]
     request: {method: GET, path: "/api/v1/orgs/acme/properties/{prop}/maintenance"}
-    expect: {status: 200, body: [{id: "{ticket_a}", ref: R-0001, raised_by_name: Tenant A}]}
+    expect: {status: 200, body: [{id: "{ticket_visit}", open_visit: {entry_state: unconfirmed}}, {id: "{ticket_sched}", open_visit: null}, {id: "{ticket_a}", ref: R-0001, raised_by_name: Tenant A}]}
 
   - name: all tickets include closed ones
     as: owner
     request: {method: GET, path: "/api/v1/orgs/acme/properties/{prop}/maintenance?status=all"}
-    expect: {status: 200, body: [{id: "{ticket_a}"}, {id: "{ticket_done}"}]}
+    expect: {status: 200, body: [{id: "{ticket_visit}"}, {id: "{ticket_sched}"}, {id: "{ticket_a}"}, {id: "{ticket_done}"}]}
 
   - name: staff read the ticket with tenants and internal notes
     as: [owner, bookkeeper]
@@ -104,3 +106,43 @@ cases:
     as: tenant_a
     request: {method: GET, path: "/api/v1/orgs/acme/maintenance/{ticket_a}"}
     expect: {status: 403, body: {error: forbidden}, exact: true}
+
+  - name: staff books a visit and sees entry not yet confirmed
+    as: owner
+    isolate: true
+    request: {method: POST, path: "/api/v1/orgs/acme/maintenance/{ticket_sched}/visits", body: {starts_at: "2030-02-01T09:00:00+10:00", ends_at: "2030-02-01T11:00:00+10:00"}}
+    expect: {status: 201, body: {status: booked, entry_state: unconfirmed, supplier: {name: Fitzroy Plumbing}}}
+
+  - name: a second open visit is a conflict
+    as: owner
+    request: {method: POST, path: "/api/v1/orgs/acme/maintenance/{ticket_visit}/visits", body: {starts_at: "2030-02-01T09:00:00Z", ends_at: "2030-02-01T11:00:00Z"}}
+    expect: {status: 409}
+    unchanged: [maintenance_visits]
+
+  - name: bookkeepers cannot book visits
+    as: bookkeeper
+    request: {method: POST, path: "/api/v1/orgs/acme/maintenance/{ticket_sched}/visits", body: {starts_at: "2030-02-01T09:00:00Z", ends_at: "2030-02-01T11:00:00Z"}}
+    expect: {status: 403, body: {error: forbidden}, exact: true}
+
+  - name: staff reschedules a visit
+    as: staff
+    isolate: true
+    request: {method: PUT, path: "/api/v1/orgs/acme/maintenance/{ticket_visit}/visits/{ticket_visit_visit}", body: {starts_at: "2030-01-08T09:00:00Z", ends_at: "2030-01-08T10:00:00Z"}}
+    expect: {status: 200, body: {status: booked, entry_state: unconfirmed}}
+
+  - name: staff cancels a visit
+    as: owner
+    isolate: true
+    request: {method: POST, path: "/api/v1/orgs/acme/maintenance/{ticket_visit}/visits/{ticket_visit_visit}/cancel", body: {reason: Plumber sick}}
+    expect: {status: 200, body: {status: cancelled}}
+
+  - name: staff ticket detail and list carry the open visit
+    as: bookkeeper
+    request: {method: GET, path: "/api/v1/orgs/acme/maintenance/{ticket_visit}"}
+    expect: {status: 200, body: {open_visit: {id: "{ticket_visit_visit}", entry_state: unconfirmed}, availability: [], entry_preference: null}}
+
+  - name: a visit on another ticket is not found through this ticket
+    as: owner
+    request: {method: POST, path: "/api/v1/orgs/acme/maintenance/{ticket_a}/visits/{ticket_visit_visit}/done"}
+    expect: {status: 404}
+    unchanged: [maintenance_visits]

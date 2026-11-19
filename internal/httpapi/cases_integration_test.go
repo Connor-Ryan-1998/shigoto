@@ -167,7 +167,22 @@ func seedCaseWorld(t *testing.T, s casefile.Seed) *caseWorld {
 		tk := s.Tickets[name]
 		lease := ids[tk.Lease]
 		contact := ids[tk.RaisedBy]
-		ids[name] = e.Ticket(orgs[tk.Org], property.NewTicket{LeaseID: &lease, ContactID: &contact, Title: tk.Title}, tk.Status, tk.Note).ID
+		ticket := e.Ticket(orgs[tk.Org], property.NewTicket{LeaseID: &lease, ContactID: &contact, Title: tk.Title}, tk.Status, tk.Note)
+		ids[name] = ticket.ID
+		if tk.Supplier != "" {
+			supplier := ids[tk.Supplier]
+			if _, err := e.Pool.Exec(e.Ctx, `UPDATE maintenance_tickets SET supplier_contact_id = $1, status = 'assigned' WHERE id = $2`, supplier, ticket.ID); err != nil {
+				t.Fatalf("tickets.%s: supplier: %v", name, err)
+			}
+		}
+		if tk.Visit {
+			start := time.Date(2030, 1, 7, 9, 0, 0, 0, time.UTC)
+			v, err := property.BookVisit(e.Ctx, e.Pool, orgs[tk.Org].ID, ticket.ID, *ticket.RaisedByUserID, nil, start, start.Add(2*time.Hour))
+			if err != nil {
+				t.Fatalf("tickets.%s: visit: %v", name, err)
+			}
+			ids[name+"_visit"] = v.ID
+		}
 	}
 	for _, name := range sortedKeys(s.Projects) {
 		p := s.Projects[name]

@@ -38,6 +38,8 @@ type TicketResponse struct {
 	ViewedAt        *time.Time      `json:"viewed_at"`
 	CompletedAt     *time.Time      `json:"completed_at"`
 	CancelledAt     *time.Time      `json:"cancelled_at"`
+	// OpenVisit is filled in by list handlers (WithOpenVisits).
+	OpenVisit *VisitResponse `json:"open_visit"`
 }
 
 // TicketToResponse converts t to its JSON shape.
@@ -144,6 +146,7 @@ func registerMaintenanceRoutes(mux *http.ServeMux, d module.Deps) {
 		return EventToResponse(ev), http.StatusCreated, err
 	})))
 	mux.Handle("POST /api/v1/orgs/{org}/maintenance/{ticketId}/files", write(uploadStaffTicketFile))
+	registerVisitRoutes(mux, d)
 	mux.Handle("GET /api/v1/orgs/{org}/maintenance/{ticketId}/files/{fileId}", read(downloadStaffTicketFile))
 }
 
@@ -188,9 +191,10 @@ func listPropertyTickets(w http.ResponseWriter, r *http.Request, d module.Deps) 
 		module.WriteCoreError(w, err)
 		return
 	}
-	out := make([]TicketResponse, 0, len(tickets))
-	for _, t := range tickets {
-		out = append(out, TicketToResponse(t))
+	out, err := WithOpenVisits(r.Context(), d.Pool, orgID, tickets, d.Cfg.Location)
+	if err != nil {
+		module.WriteCoreError(w, err)
+		return
 	}
 	module.WriteJSON(w, http.StatusOK, out)
 }
@@ -285,10 +289,13 @@ func getStaffTicket(w http.ResponseWriter, r *http.Request, d module.Deps) {
 		module.WriteCoreError(w, err)
 		return
 	}
-	module.WriteJSON(w, http.StatusOK, map[string]any{
-		"ticket": TicketToResponse(t), "tenants": tenants,
-		"files": FilesToResponse(files), "events": EventsToResponse(events),
-	})
+	resp, err := SchedulingDetail(ctx, d.Pool, orgID, id, d.Cfg.Location)
+	if err != nil {
+		module.WriteCoreError(w, err)
+		return
+	}
+	resp["ticket"], resp["tenants"], resp["files"], resp["events"] = TicketToResponse(t), tenants, FilesToResponse(files), EventsToResponse(events)
+	module.WriteJSON(w, http.StatusOK, resp)
 }
 
 func uploadStaffTicketFile(w http.ResponseWriter, r *http.Request, d module.Deps) {

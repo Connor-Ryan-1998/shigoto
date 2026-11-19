@@ -117,6 +117,11 @@ type SeedTicket struct {
 	Title    string `yaml:"title"`
 	Status   string `yaml:"status"`
 	Note     string `yaml:"note"`
+	// Supplier (a seed supplier contact) is assigned; Visit then books a
+	// visit with them on 2030-01-07 09:00-11:00 UTC, its ID named
+	// "<ticket>_visit".
+	Supplier string `yaml:"supplier"`
+	Visit    bool   `yaml:"visit"`
 }
 
 // SeedPayment is a bank-transfer payment of Amount against the Period-th
@@ -258,6 +263,13 @@ func (s Seed) seedNames() map[string]string {
 	add("leases", sortedKeys(s.Leases))
 	add("payments", sortedKeys(s.Payments))
 	add("tickets", sortedKeys(s.Tickets))
+	var visits []string
+	for _, name := range sortedKeys(s.Tickets) {
+		if s.Tickets[name].Visit {
+			visits = append(visits, name+"_visit")
+		}
+	}
+	add("visits", visits)
 	add("projects", sortedKeys(s.Projects))
 	add("tasks", sortedKeys(s.Tasks))
 	add("invites", sortedKeys(s.Invites))
@@ -413,6 +425,12 @@ func (f File) Validate() error {
 			seedErr("%s: lease: unknown lease %q in org %q", where, tk.Lease, tk.Org)
 		}
 		checkContact(where, "raised_by", tk.RaisedBy, tk.Org)
+		if tk.Supplier != "" {
+			checkContact(where, "supplier", tk.Supplier, tk.Org)
+		}
+		if tk.Visit && tk.Supplier == "" {
+			seedErr("%s: visit needs a supplier", where)
+		}
 		switch tk.Status {
 		case "", "new", "viewed", "assigned", "scheduled", "completed", "cancelled":
 		default:
