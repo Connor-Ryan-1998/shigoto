@@ -625,7 +625,7 @@ func TestWebhookPaysUncollectibleInvoice(t *testing.T) {
 	org := e.Org("acme")
 	fake := &payments.Fake{Secret: webhookSecret}
 	invID := webhookContactAndInvoice(e, org, "in_fake_1", 10000)
-	if _, err := core.MarkInvoiceUncollectible(e.Ctx, e.Pool, org.ID, invID); err != nil {
+	if _, err := core.MarkInvoiceUncollectible(e.Ctx, e.Pool, org.ID, invID, time.Now()); err != nil {
 		t.Fatalf("MarkInvoiceUncollectible: %v", err)
 	}
 	hook := e.Anonymous(e.Handler(testkit.OnlyModules(), fakePayments(map[string]*payments.Fake{"acme": fake})))

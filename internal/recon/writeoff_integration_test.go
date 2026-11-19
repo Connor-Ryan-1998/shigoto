@@ -18,7 +18,7 @@ import (
 func writtenOffInvoice(t *testing.T, e *testkit.Env, org core.Org) core.Invoice {
 	t.Helper()
 	inv := e.Invoice(org, e.Contact(org).ID, testkit.Amount(10000), testkit.InvoiceGST("N-T"), testkit.Issued(time.Now()))
-	inv, err := core.MarkInvoiceUncollectible(e.Ctx, e.Pool, org.ID, inv.ID)
+	inv, err := core.MarkInvoiceUncollectible(e.Ctx, e.Pool, org.ID, inv.ID, time.Now())
 	if err != nil {
 		t.Fatalf("MarkInvoiceUncollectible: %v", err)
 	}

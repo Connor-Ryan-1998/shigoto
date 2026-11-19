@@ -120,12 +120,18 @@ type Invoice struct {
 	// ExternalRef identifies an imported invoice ("import:<number>");
 	// empty for invoices created in Shigoto.
 	ExternalRef string
-	Lines       []InvoiceLine
+	// WrittenOffOn and WrittenOffAmount record when the invoice was last
+	// written off and how much was outstanding then. Both are cleared on
+	// reinstatement.
+	WrittenOffOn     *time.Time
+	WrittenOffAmount int64
+	Lines            []InvoiceLine
 }
 
 const invoiceColumns = `id, org_id, contact_id, number, source, status, issue_date, due_date,
 	due_in_days, due_on, currency, subtotal, gst_total, total, payment_reference,
-	coalesce(provider_ref,''), coalesce(provider_url,''), written_off, coalesce(external_ref,'')`
+	coalesce(provider_ref,''), coalesce(provider_url,''), written_off, coalesce(external_ref,''),
+	written_off_on, written_off_amount`
 
 func scanInvoice(row pgx.Row) (Invoice, error) {
 	var inv Invoice
@@ -133,7 +139,8 @@ func scanInvoice(row pgx.Row) (Invoice, error) {
 	var subtotal, gstTotal, total int64
 	err := row.Scan(&inv.ID, &inv.OrgID, &inv.ContactID, &number, &inv.Source, &inv.Status,
 		&inv.IssueDate, &inv.DueDate, &inv.DueInDays, &inv.DueOn, &inv.Currency, &subtotal, &gstTotal, &total,
-		&inv.PaymentReference, &inv.ProviderRef, &inv.ProviderURL, &inv.WrittenOff, &inv.ExternalRef)
+		&inv.PaymentReference, &inv.ProviderRef, &inv.ProviderURL, &inv.WrittenOff, &inv.ExternalRef,
+		&inv.WrittenOffOn, &inv.WrittenOffAmount)
 	if err != nil {
 		return Invoice{}, err
 	}
@@ -491,38 +498,50 @@ func IssueInvoice(ctx context.Context, tx Querier, orgID, id int64, today time.T
 }
 
 // MarkInvoiceUncollectible writes off an 'open' invoice: status becomes
-// 'uncollectible' and written_off is set. Any other status returns
+// 'uncollectible', written_off is set, and written_off_on/written_off_amount
+// record today and the amount still outstanding. Any other status returns
 // ErrInvalidState. It locks the invoice row; run it in the caller's
 // transaction alongside the audit entry and any provider call.
-func MarkInvoiceUncollectible(ctx context.Context, tx Querier, orgID, id int64) (Invoice, error) {
-	return transitionInvoice(ctx, tx, orgID, id, "open", "uncollectible", true)
-}
-
-// ReinstateInvoice reverses a write-off: an 'uncollectible' invoice becomes
-// 'open' again and written_off is cleared. Any other status returns
-// ErrInvalidState.
-func ReinstateInvoice(ctx context.Context, tx Querier, orgID, id int64) (Invoice, error) {
-	return transitionInvoice(ctx, tx, orgID, id, "uncollectible", "open", false)
-}
-
-// transitionInvoice locks invoice id, checks it is in status from, and
-// moves it to status to with written_off set to writtenOff.
-func transitionInvoice(ctx context.Context, tx Querier, orgID, id int64, from, to string, writtenOff bool) (Invoice, error) {
-	var status string
-	err := tx.QueryRow(ctx, `SELECT status FROM invoices WHERE org_id = $1 AND id = $2 FOR UPDATE`, orgID, id).Scan(&status)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return Invoice{}, ErrNotFound
-	}
-	if err != nil {
+func MarkInvoiceUncollectible(ctx context.Context, tx Querier, orgID, id int64, today time.Time) (Invoice, error) {
+	if err := lockInvoiceStatus(ctx, tx, orgID, id, "open"); err != nil {
 		return Invoice{}, err
 	}
-	if status != from {
-		return Invoice{}, ErrInvalidState
-	}
-	if _, err := tx.Exec(ctx, `UPDATE invoices SET status = $1, written_off = $2 WHERE org_id = $3 AND id = $4`, to, writtenOff, orgID, id); err != nil {
+	if _, err := tx.Exec(ctx, `
+		UPDATE invoices i SET status = 'uncollectible', written_off = true, written_off_on = $3,
+			written_off_amount = greatest(i.total - coalesce((SELECT sum(p.amount) FROM payments p WHERE p.org_id = i.org_id AND p.invoice_id = i.id), 0), 0)
+		WHERE i.org_id = $1 AND i.id = $2`, orgID, id, today); err != nil {
 		return Invoice{}, err
 	}
 	return GetInvoice(ctx, tx, orgID, id)
+}
+
+// ReinstateInvoice reverses a write-off: an 'uncollectible' invoice becomes
+// 'open' again and written_off and its date/amount are cleared. Any other
+// status returns ErrInvalidState.
+func ReinstateInvoice(ctx context.Context, tx Querier, orgID, id int64) (Invoice, error) {
+	if err := lockInvoiceStatus(ctx, tx, orgID, id, "uncollectible"); err != nil {
+		return Invoice{}, err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE invoices SET status = 'open', written_off = false, written_off_on = NULL, written_off_amount = 0 WHERE org_id = $1 AND id = $2`, orgID, id); err != nil {
+		return Invoice{}, err
+	}
+	return GetInvoice(ctx, tx, orgID, id)
+}
+
+// lockInvoiceStatus locks invoice id and checks it is in status want.
+func lockInvoiceStatus(ctx context.Context, tx Querier, orgID, id int64, want string) error {
+	var status string
+	err := tx.QueryRow(ctx, `SELECT status FROM invoices WHERE org_id = $1 AND id = $2 FOR UPDATE`, orgID, id).Scan(&status)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	if status != want {
+		return ErrInvalidState
+	}
+	return nil
 }
 
 // VoidInvoice voids a 'draft', 'open' or 'uncollectible' invoice, keeping its

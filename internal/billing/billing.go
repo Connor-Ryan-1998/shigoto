@@ -389,7 +389,7 @@ func (s *Service) MarkUncollectible(ctx context.Context, orgID int64, orgSlug st
 	var providerErr error
 	err := RunInTx(ctx, s.Pool, func(tx pgx.Tx) error {
 		var err error
-		inv, err = core.MarkInvoiceUncollectible(ctx, tx, orgID, invoiceID)
+		inv, err = core.MarkInvoiceUncollectible(ctx, tx, orgID, invoiceID, time.Now().In(s.loc()))
 		if err != nil {
 			return err
 		}
