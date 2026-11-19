@@ -524,7 +524,7 @@ func downloadFileHandler(w http.ResponseWriter, r *http.Request, d module.Deps) 
 		module.WriteCoreError(w, err)
 		return
 	}
-	module.ServeFile(w, f, d.Store)
+	module.ServeFile(w, r, d.Store, f, false)
 }
 
 // --- expenses ---

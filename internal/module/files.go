@@ -1,7 +1,6 @@
 package module
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -139,21 +138,31 @@ func isTooLarge(err error) bool {
 	return errors.Is(err, core.ErrTooLarge) || errors.As(err, &tooLarge)
 }
 
-// ServeFile streams f's bytes with its stored (sniffed) MIME type.
-// X-Content-Type-Options: nosniff stops a browser from second-guessing
-// that type from the content; Content-Disposition forces a download using
-// the sanitized original name rather than the stored key.
-func ServeFile(w http.ResponseWriter, f core.File, store storage.Store) {
-	stored, err := core.OpenFile(context.Background(), store, f)
+// inlineMIME lists the media types ServeFile may show inline (in an
+// <img>, <video> or <audio> element) rather than forcing a download.
+var inlineMIME = core.MediaPolicy(0).Allowed
+
+// ServeFile serves f's bytes with its stored (sniffed) MIME type, honouring
+// HTTP Range requests (iOS Safari requires them for video playback). With
+// inline true and a media MIME type the file is served inline; anything
+// else is an attachment download under the sanitized original name.
+// X-Content-Type-Options: nosniff stops a browser second-guessing the type,
+// and Content-Security-Policy: sandbox neuters anything opened directly.
+func ServeFile(w http.ResponseWriter, r *http.Request, store storage.Store, f core.File, inline bool) {
+	blob, err := core.OpenFile(r.Context(), store, f)
 	if err != nil {
 		WriteCoreError(w, fmt.Errorf("opening stored file: %w", err))
 		return
 	}
-	defer stored.Close()
+	defer blob.Close()
 
+	disposition := "attachment"
+	if inline && inlineMIME[f.MIME] {
+		disposition = "inline"
+	}
 	w.Header().Set("Content-Type", f.MIME)
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("Content-Disposition", `attachment; filename="`+SanitizeFilename(f.OriginalName)+`"`)
-	w.WriteHeader(http.StatusOK)
-	_, _ = io.Copy(w, stored)
+	w.Header().Set("Content-Security-Policy", "sandbox")
+	w.Header().Set("Content-Disposition", disposition+`; filename="`+SanitizeFilename(f.OriginalName)+`"`)
+	http.ServeContent(w, r, "", f.CreatedAt, blob)
 }

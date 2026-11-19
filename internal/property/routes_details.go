@@ -234,7 +234,7 @@ func downloadPropertyFileHandler(w http.ResponseWriter, r *http.Request, d modul
 		module.WriteCoreError(w, err)
 		return
 	}
-	module.ServeFile(w, f, d.Store)
+	module.ServeFile(w, r, d.Store, f, false)
 }
 
 // --- depreciation ---
