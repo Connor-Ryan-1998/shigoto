@@ -14,9 +14,15 @@ import PropertyDetailsPage from '../../routes/[org]/properties/[id]/+page.svelte
 import InsuranceDialog from '../modules/property/InsuranceDialog.svelte';
 import DepreciationItemDialog from '../modules/property/DepreciationItemDialog.svelte';
 import Item21MappingDialog from '../modules/property/Item21MappingDialog.svelte';
+import NewTicketDialog from '../modules/property/NewTicketDialog.svelte';
+import AssignSupplierDialog from '../modules/property/AssignSupplierDialog.svelte';
+import TicketMessageDialog from '../modules/property/TicketMessageDialog.svelte';
 import PropertyNotesPage from '../../routes/[org]/properties/[id]/notes/+page.svelte';
 
 export const components = {
+	AssignSupplierDialog,
+	NewTicketDialog,
+	TicketMessageDialog,
 	BillingRunDialog,
 	ContactDialog,
 	DepreciationItemDialog,

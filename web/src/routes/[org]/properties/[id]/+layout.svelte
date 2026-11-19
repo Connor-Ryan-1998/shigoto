@@ -17,7 +17,8 @@
 		{ href: base, label: 'Details' },
 		{ href: `${base}/bills`, label: 'Bills' },
 		{ href: `${base}/depreciation`, label: 'Depreciation' },
-		{ href: `${base}/notes`, label: 'Notes' }
+		{ href: `${base}/notes`, label: 'Notes' },
+		{ href: `${base}/maintenance`, label: 'Maintenance' }
 	]);
 	const path = $derived(page.url?.pathname ?? '');
 	const current = (href: string) => path === href || (href !== base && path.startsWith(`${href}/`));

@@ -1,0 +1,14 @@
+id: maintenance-new-ticket
+component: NewTicketDialog
+props: {open: true, org: acme, propertyId: "1"}
+callbacks: [oncreated]
+fill: {Title: Gutters overflowing, Description: Water over the back door}
+submit: Create repair
+request: POST /api/v1/orgs/acme/properties/1/maintenance
+contract:
+  blocks_duplicate_submit: true
+  preserves_input_on: 422
+  cancel: Cancel
+  busy_dismiss_blocked: true
+  dirty_dismiss_confirms: true
+  dirty_navigation_blocked: true

@@ -1,0 +1,20 @@
+id: maintenance-assign
+component: AssignSupplierDialog
+props:
+  open: true
+  org: acme
+  ticket: {id: 7, ref: R-0001, title: Tap, status: new, urgency: routine, supplier: null}
+callbacks: [onsaved]
+api:
+  GET /api/v1/orgs/acme/contacts?kind=supplier: [{id: 4, name: Fitzroy Plumbing}, {id: 5, name: Sparky Co}]
+ready: Tradesperson
+fill: {Tradesperson: "5"}
+submit: Assign
+request: PUT /api/v1/orgs/acme/maintenance/7/supplier
+contract:
+  blocks_duplicate_submit: true
+  preserves_input_on: 422
+  cancel: Cancel
+  busy_dismiss_blocked: true
+  dirty_dismiss_confirms: true
+  dirty_navigation_blocked: true

@@ -1,0 +1,14 @@
+id: maintenance-note
+component: TicketMessageDialog
+props: {open: true, org: acme, ticketId: 7, action: note}
+callbacks: [onsaved]
+fill: {Note: Called the plumber}
+submit: Save note
+request: POST /api/v1/orgs/acme/maintenance/7/events
+contract:
+  blocks_duplicate_submit: true
+  preserves_input_on: 422
+  cancel: Close
+  busy_dismiss_blocked: true
+  dirty_dismiss_confirms: true
+  dirty_navigation_blocked: true

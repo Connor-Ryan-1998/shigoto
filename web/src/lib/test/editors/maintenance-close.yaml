@@ -1,0 +1,14 @@
+id: maintenance-close
+component: TicketMessageDialog
+props: {open: true, org: acme, ticketId: 7, action: cancel}
+callbacks: [onsaved]
+fill: {Reason: Tenant fixed it}
+submit: Cancel repair
+request: POST /api/v1/orgs/acme/maintenance/7/cancel
+contract:
+  blocks_duplicate_submit: true
+  preserves_input_on: 422
+  cancel: Close
+  busy_dismiss_blocked: true
+  dirty_dismiss_confirms: true
+  dirty_navigation_blocked: true

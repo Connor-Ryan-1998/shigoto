@@ -23,7 +23,8 @@ it('titles the page with the property and marks the active section', async () =>
 		['Details', '/acme/properties/1', null],
 		['Bills', '/acme/properties/1/bills', 'page'],
 		['Depreciation', '/acme/properties/1/depreciation', null],
-		['Notes', '/acme/properties/1/notes', null]
+		['Notes', '/acme/properties/1/notes', null],
+		['Maintenance', '/acme/properties/1/maintenance', null]
 	]);
 	expect(screen.getByRole('link', { name: 'Back to properties' }).getAttribute('href')).toBe('/acme/properties');
 	expect(screen.getByText('Tab body')).toBeTruthy();
