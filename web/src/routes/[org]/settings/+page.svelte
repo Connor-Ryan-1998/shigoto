@@ -19,6 +19,7 @@
 		payid: string;
 		invoice_lead_days: number;
 		auto_send_rent: boolean;
+		emergency_phone: string;
 	};
 
 	const org = $derived(page.params.org);
@@ -137,6 +138,12 @@
 				</Field>
 				<label class="label"><input class="checkbox" type="checkbox" bind:checked={settings.auto_send_rent} /> Send rent invoices automatically</label>
 				<p class="text-base-content/70">Automatic sending uses the configured payment provider.</p>
+			</fieldset>
+			<fieldset disabled={saving} class="fieldset grid gap-3 rounded-box border border-base-300 bg-base-100 p-4">
+				<legend class="fieldset-legend">Repairs</legend>
+				<Field label="Emergency repairs phone" id="settings-emergency-phone" hint="Shown to tenants who mark a repair as urgent.">
+					<input class="input w-full" id="settings-emergency-phone" type="tel" autocomplete="tel" bind:value={settings.emergency_phone} />
+				</Field>
 			</fieldset>
 			<FormActions busy={saving} submitLabel="Save settings" oncancel={cancel} />
 		</form>

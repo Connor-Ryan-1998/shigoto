@@ -36,13 +36,14 @@ type settingsRequest struct {
 	PayID           string `json:"payid"`
 	InvoiceLeadDays int    `json:"invoice_lead_days"`
 	AutoSendRent    bool   `json:"auto_send_rent"`
+	EmergencyPhone  string `json:"emergency_phone"`
 }
 
 func settingsToResponse(s core.OrgSettings) settingsRequest {
 	return settingsRequest{
 		Name: s.Name, ABN: s.ABN, GSTRegistered: s.GSTRegistered, BASFrequency: s.BASFrequency,
 		BankBSB: s.BankBSB, BankAccount: s.BankAccount, PayID: s.PayID,
-		InvoiceLeadDays: s.InvoiceLeadDays, AutoSendRent: s.AutoSendRent,
+		InvoiceLeadDays: s.InvoiceLeadDays, AutoSendRent: s.AutoSendRent, EmergencyPhone: s.EmergencyPhone,
 	}
 }
 
@@ -50,7 +51,7 @@ func settingsFromRequest(body settingsRequest) core.OrgSettings {
 	return core.OrgSettings{
 		Name: body.Name, ABN: body.ABN, GSTRegistered: body.GSTRegistered, BASFrequency: body.BASFrequency,
 		BankBSB: body.BankBSB, BankAccount: body.BankAccount, PayID: body.PayID,
-		InvoiceLeadDays: body.InvoiceLeadDays, AutoSendRent: body.AutoSendRent,
+		InvoiceLeadDays: body.InvoiceLeadDays, AutoSendRent: body.AutoSendRent, EmergencyPhone: body.EmergencyPhone,
 	}
 }
 

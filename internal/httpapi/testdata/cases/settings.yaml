@@ -4,6 +4,7 @@ seed:
   orgs: [acme]
   users:
     staff: {org: acme, role: staff}
+    owner: {org: acme, role: owner}
 
 cases:
   # Staff holds invoices_write but not org_admin. The body is valid, so a
@@ -16,3 +17,21 @@ cases:
       body: {name: Acme Org, invoice_lead_days: 7}
     expect: {status: 403, body: {error: forbidden}, exact: true}
     unchanged: [orgs, audit_log]
+
+  - name: owner saves an emergency repairs phone
+    as: owner
+    isolate: true
+    request:
+      method: PUT
+      path: /api/v1/orgs/acme/settings
+      body: {name: Acme Org, invoice_lead_days: 7, emergency_phone: "0400 123 456"}
+    expect: {status: 200, body: {emergency_phone: "0400 123 456"}}
+
+  - name: an emergency phone must look like a phone number
+    as: owner
+    request:
+      method: PUT
+      path: /api/v1/orgs/acme/settings
+      body: {name: Acme Org, invoice_lead_days: 7, emergency_phone: call me}
+    expect: {status: 422, body: {error: "invalid input: invalid emergency_phone"}, exact: true}
+    unchanged: [orgs]

@@ -225,7 +225,7 @@ screens that need no route-specific rewrite.
 | `[org]/reconciliation/accounts/+page.svelte` | Shared back/header; protected account/import dialogs | module `ImportDialog.svelte`; import API covered by `e2e/financial-workflows.spec.ts` |
 | `[org]/reports/+page.svelte` | Shared filter surfaces; financial tables, grouping, CSV retained; rental section with protected Item 21 labels dialog | `+page.test.ts`, `lib/test/editors/item21-mapping.yaml`, `e2e/financial-workflows.spec.ts` |
 | `[org]/reports/rental/+page.svelte` | Printable report view (app chrome hidden in print); CSV link | `+page.svelte.test.ts`, `e2e/financial-workflows.spec.ts` |
-| `[org]/settings/+page.svelte` | Grouped draft with Save/Cancel and navigation protection | `+page.svelte.test.ts`, `lib/test/editors/settings-page.yaml`, `e2e/financial-workflows.spec.ts` |
+| `[org]/settings/+page.svelte` | Grouped draft with Save/Cancel and navigation protection; Repairs group (emergency phone) | `+page.svelte.test.ts`, `lib/test/editors/settings-page.yaml`, `e2e/financial-workflows.spec.ts` |
 | `[org]/settings/members/+page.svelte` | Existing stable background-refresh list; protected invite dialogs | `+page.test.ts`, module invite/table tests |
 | `portal/+page.svelte` | Shared header; picker/single-org redirect retained | `e2e/portal.spec.ts` |
 | `portal/[org]/invoices/+page.svelte` | Shared table/format/state layout; numeric alignment | `e2e/portal.spec.ts` |

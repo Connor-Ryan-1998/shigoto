@@ -11,7 +11,7 @@ import Page from './+page.svelte';
 const settings = {
 	name: 'Acme', abn: '', gst_registered: false, bas_frequency: '',
 	bank_bsb: '001002', bank_account: '00123456', payid: 'owner@example.com',
-	invoice_lead_days: 0, auto_send_rent: true
+	invoice_lead_days: 0, auto_send_rent: true, emergency_phone: '0400 123 456'
 };
 
 beforeEach(() => {
@@ -82,8 +82,20 @@ describe('organisation settings', () => {
 		expect(apiMock).toHaveBeenCalledWith('PUT', '/api/v1/orgs/acme/settings', {
 			name: 'New name', abn: '', gst_registered: false, bas_frequency: '',
 			bank_bsb: '001002', bank_account: '00123456', payid: 'owner@example.com',
-			invoice_lead_days: 0, auto_send_rent: true
+			invoice_lead_days: 0, auto_send_rent: true, emergency_phone: '0400 123 456'
 		});
+	});
+
+	it('edits the emergency repairs phone', async () => {
+		render(Page);
+		await loaded();
+		const phone = screen.getByLabelText('Emergency repairs phone') as HTMLInputElement;
+		expect(phone.value).toBe('0400 123 456');
+		expect(screen.getByText('Shown to tenants who mark a repair as urgent.')).toBeTruthy();
+		await fireEvent.input(phone, { target: { value: '07 3000 0000' } });
+		await fireEvent.submit(form());
+		await screen.findByRole('status');
+		expect(apiMock).toHaveBeenCalledWith('PUT', '/api/v1/orgs/acme/settings', expect.objectContaining({ emergency_phone: '07 3000 0000' }));
 	});
 
 	it('preserves leading zeros, sends numeric bounds and adopts normalized response', async () => {

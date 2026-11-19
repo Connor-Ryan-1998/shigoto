@@ -56,6 +56,26 @@ func TestSettingsValidation(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name:    "emergency phone mobile",
+			modify:  func(s OrgSettings) OrgSettings { s.EmergencyPhone = "0400 123 456"; return s },
+			wantErr: false,
+		},
+		{
+			name:    "emergency phone international landline",
+			modify:  func(s OrgSettings) OrgSettings { s.EmergencyPhone = "+61 (7) 3000-0000"; return s },
+			wantErr: false,
+		},
+		{
+			name:    "emergency phone words",
+			modify:  func(s OrgSettings) OrgSettings { s.EmergencyPhone = "call me"; return s },
+			wantErr: true,
+		},
+		{
+			name:    "emergency phone too short",
+			modify:  func(s OrgSettings) OrgSettings { s.EmergencyPhone = "000"; return s },
+			wantErr: true,
+		},
+		{
 			name:    "invoice lead days too high",
 			modify:  func(s OrgSettings) OrgSettings { s.InvoiceLeadDays = 15; return s },
 			wantErr: true,

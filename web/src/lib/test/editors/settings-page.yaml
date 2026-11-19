@@ -5,8 +5,8 @@ session: {perms: [org_admin]}
 api:
   GET /api/v1/orgs/acme/settings:
     {name: Acme, abn: "", gst_registered: false, bas_frequency: "", bank_bsb: "001002", bank_account: "00123456",
-     payid: owner@example.com, invoice_lead_days: 0, auto_send_rent: true}
-fill: {Organisation name: Acme Pty, PayID: bad payid}
+     payid: owner@example.com, invoice_lead_days: 0, auto_send_rent: true, emergency_phone: ""}
+fill: {Organisation name: Acme Pty, PayID: bad payid, Emergency repairs phone: 0400 123 456}
 submit: Save settings
 request: PUT /api/v1/orgs/acme/settings
 contract:

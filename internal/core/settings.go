@@ -24,12 +24,15 @@ type OrgSettings struct {
 	PayID           string
 	InvoiceLeadDays int
 	AutoSendRent    bool
+	// EmergencyPhone is shown to tenants who mark a repair as urgent.
+	EmergencyPhone string
 }
 
 var (
 	bsbPattern      = regexp.MustCompile(`^\d{3}-?\d{3}$`)
 	accountPattern  = regexp.MustCompile(`^\d{6,10}$`)
 	auMobilePattern = regexp.MustCompile(`^(\+61|0)4\d{8}$`)
+	phonePattern    = regexp.MustCompile(`^\+?[0-9 ()-]{8,20}$`)
 )
 
 // ValidABN reports whether s is a valid Australian Business Number: 11
@@ -116,6 +119,19 @@ func validateSettings(in OrgSettings) (OrgSettings, error) {
 		}
 	}
 
+	in.EmergencyPhone = strings.TrimSpace(in.EmergencyPhone)
+	if in.EmergencyPhone != "" {
+		digits := 0
+		for _, r := range in.EmergencyPhone {
+			if r >= '0' && r <= '9' {
+				digits++
+			}
+		}
+		if !phonePattern.MatchString(in.EmergencyPhone) || digits < 6 {
+			return OrgSettings{}, fmt.Errorf("%w: invalid emergency_phone", ErrInvalidInput)
+		}
+	}
+
 	if in.InvoiceLeadDays < 0 || in.InvoiceLeadDays > 14 {
 		return OrgSettings{}, fmt.Errorf("%w: invalid invoice_lead_days", ErrInvalidInput)
 	}
@@ -128,12 +144,12 @@ func validateSettings(in OrgSettings) (OrgSettings, error) {
 
 const settingsColumns = `name, coalesce(abn,''), gst_registered, coalesce(bas_frequency,''),
 	coalesce(bank_bsb,''), coalesce(bank_account,''), coalesce(payid,''),
-	invoice_lead_days, auto_send_rent`
+	invoice_lead_days, auto_send_rent, emergency_phone`
 
 func scanSettings(row pgx.Row) (OrgSettings, error) {
 	var s OrgSettings
 	err := row.Scan(&s.Name, &s.ABN, &s.GSTRegistered, &s.BASFrequency,
-		&s.BankBSB, &s.BankAccount, &s.PayID, &s.InvoiceLeadDays, &s.AutoSendRent)
+		&s.BankBSB, &s.BankAccount, &s.PayID, &s.InvoiceLeadDays, &s.AutoSendRent, &s.EmergencyPhone)
 	return s, err
 }
 
@@ -169,12 +185,13 @@ func UpdateSettings(ctx context.Context, q Querier, orgID int64, in OrgSettings)
 			bank_account = NULLIF($6, ''),
 			payid = NULLIF($7, ''),
 			invoice_lead_days = $8,
-			auto_send_rent = $9
+			auto_send_rent = $9,
+			emergency_phone = $11
 		WHERE id = $10
 		RETURNING `+settingsColumns,
 		validated.Name, validated.ABN, validated.GSTRegistered, validated.BASFrequency,
 		validated.BankBSB, validated.BankAccount, validated.PayID,
-		validated.InvoiceLeadDays, validated.AutoSendRent, orgID,
+		validated.InvoiceLeadDays, validated.AutoSendRent, orgID, validated.EmergencyPhone,
 	)
 	out, err := scanSettings(row)
 	if errors.Is(err, pgx.ErrNoRows) {
