@@ -51,6 +51,7 @@ type Seed struct {
 	Invoices   map[string]SeedInvoice  `yaml:"invoices"`
 	Properties map[string]SeedProperty `yaml:"properties"`
 	Leases     map[string]SeedLease    `yaml:"leases"`
+	Payments   map[string]SeedPayment  `yaml:"payments"`
 	Projects   map[string]SeedProject  `yaml:"projects"`
 	Tasks      map[string]SeedTask     `yaml:"tasks"`
 	Invites    map[string]SeedInvite   `yaml:"invites"`
@@ -91,12 +92,25 @@ type SeedProperty struct {
 }
 
 // SeedLease is a lease on the seed property Property with the seed contact
-// Tenant as primary tenant. Rent 0 takes the testkit default.
+// Tenant as primary tenant and CoTenants as further tenants. Rent 0 takes
+// the testkit default. RentRun runs rent as of the lease start and issues
+// every period invoice it creates.
 type SeedLease struct {
-	Org      string `yaml:"org"`
-	Property string `yaml:"property"`
-	Tenant   string `yaml:"tenant"`
-	Rent     int64  `yaml:"rent"`
+	Org       string   `yaml:"org"`
+	Property  string   `yaml:"property"`
+	Tenant    string   `yaml:"tenant"`
+	CoTenants []string `yaml:"co_tenants"`
+	Rent      int64    `yaml:"rent"`
+	RentRun   bool     `yaml:"rent_run"`
+}
+
+// SeedPayment is a bank-transfer payment of Amount against the Period-th
+// (0-based) rent invoice of the seed lease Lease, which needs rent_run.
+type SeedPayment struct {
+	Org    string `yaml:"org"`
+	Lease  string `yaml:"lease"`
+	Period int    `yaml:"period"`
+	Amount int64  `yaml:"amount"`
 }
 
 // SeedProject is a timesheets project for the seed contact Client.
@@ -226,6 +240,7 @@ func (s Seed) seedNames() map[string]string {
 	add("invoices", sortedKeys(s.Invoices))
 	add("properties", sortedKeys(s.Properties))
 	add("leases", sortedKeys(s.Leases))
+	add("payments", sortedKeys(s.Payments))
 	add("projects", sortedKeys(s.Projects))
 	add("tasks", sortedKeys(s.Tasks))
 	add("invites", sortedKeys(s.Invites))
@@ -274,6 +289,7 @@ func (f File) Validate() error {
 		{"invoices", sortedKeys(s.Invoices)},
 		{"properties", sortedKeys(s.Properties)},
 		{"leases", sortedKeys(s.Leases)},
+		{"payments", sortedKeys(s.Payments)},
 		{"projects", sortedKeys(s.Projects)},
 		{"tasks", sortedKeys(s.Tasks)},
 		{"invites", sortedKeys(s.Invites)},
@@ -347,8 +363,28 @@ func (f File) Validate() error {
 			seedErr("%s: property: property %q is in org %q, not %q", where, l.Property, p.Org, l.Org)
 		}
 		checkContact(where, "tenant", l.Tenant, l.Org)
+		for _, co := range l.CoTenants {
+			checkContact(where, "co_tenants", co, l.Org)
+		}
 		if l.Rent < 0 {
 			seedErr("%s: negative rent %d", where, l.Rent)
+		}
+	}
+	for _, name := range sortedKeys(s.Payments) {
+		p := s.Payments[name]
+		where := "payments." + name
+		checkOrg(where, p.Org)
+		l, ok := s.Leases[p.Lease]
+		switch {
+		case !ok:
+			seedErr("%s: lease: unknown lease %q", where, p.Lease)
+		case l.Org != p.Org:
+			seedErr("%s: lease: lease %q is in org %q, not %q", where, p.Lease, l.Org, p.Org)
+		case !l.RentRun:
+			seedErr("%s: lease %q needs rent_run: true", where, p.Lease)
+		}
+		if p.Amount <= 0 || p.Period < 0 {
+			seedErr("%s: amount must be positive and period non-negative", where)
 		}
 	}
 	for _, name := range sortedKeys(s.Projects) {

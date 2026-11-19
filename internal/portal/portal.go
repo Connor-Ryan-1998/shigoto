@@ -150,6 +150,9 @@ type Lease struct {
 	ID              int64              `json:"id"`
 	PropertyName    string             `json:"property_name"`
 	PropertyAddress string             `json:"property_address"`
+	StartDate       string             `json:"start_date"`
+	EndDate         *string            `json:"end_date"`
+	Active          bool               `json:"active"`
 	RentAmount      int64              `json:"rent_amount"`
 	Frequency       string             `json:"frequency"`
 	NextDue         *LeaseLedgerPeriod `json:"next_due,omitempty"`
@@ -244,6 +247,9 @@ func ListLeases(ctx context.Context, q core.Querier, orgID, contactID int64, tod
 			ID:              l.ID,
 			PropertyName:    prop.Name,
 			PropertyAddress: prop.Address,
+			StartDate:       l.StartDate.Format("2006-01-02"),
+			EndDate:         dateStr(l.EndDate),
+			Active:          property.LeaseActive(l, today),
 			RentAmount:      currentRent(l, today),
 			Frequency:       string(l.Frequency),
 			NextDue:         nextDuePeriod(ledger),

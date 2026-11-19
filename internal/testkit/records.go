@@ -232,6 +232,43 @@ func (e *Env) Lease(org core.Org, propertyID, tenantContactID int64, opts ...Lea
 	return l
 }
 
+// IssueRent runs rent for lease as of its start date and issues every
+// period invoice created, returning their IDs in period order.
+func (e *Env) IssueRent(org core.Org, lease property.Lease) []int64 {
+	e.T.Helper()
+	if _, err := property.RunRent(e.Ctx, e.BillingService(), org.ID, org.Slug, lease.StartDate); err != nil {
+		e.T.Fatalf("running rent for lease %d: %v", lease.ID, err)
+		return nil
+	}
+	ledger, err := property.GetLedger(e.Ctx, e.Pool, org.ID, lease.ID, lease.StartDate)
+	if err != nil {
+		e.T.Fatalf("ledger for lease %d: %v", lease.ID, err)
+		return nil
+	}
+	var ids []int64
+	for _, p := range ledger.Periods {
+		if p.InvoiceID != nil {
+			e.Issue(org, *p.InvoiceID, lease.StartDate)
+			ids = append(ids, *p.InvoiceID)
+		}
+	}
+	return ids
+}
+
+// Payment records a bank-transfer payment of amount on invoiceID, paid on
+// paidOn, and returns its ID.
+func (e *Env) Payment(org core.Org, invoiceID int64, amount core.Cents, paidOn time.Time) int64 {
+	e.T.Helper()
+	p, _, err := core.RecordPayment(e.Ctx, e.Pool, org.ID, core.NewPayment{
+		InvoiceID: invoiceID, Amount: amount, PaidOn: paidOn, Method: "bank_transfer",
+	})
+	if err != nil {
+		e.T.Fatalf("recording payment on invoice %d: %v", invoiceID, err)
+		return 0
+	}
+	return p.ID
+}
+
 // --- timesheets ---
 
 // ProjectOption customises Env.Project.

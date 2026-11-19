@@ -128,13 +128,29 @@ func seedCaseWorld(t *testing.T, s casefile.Seed) *caseWorld {
 		}
 		ids[name] = e.Property(orgs[p.Org], opts...).ID
 	}
+	leaseInvoices := map[string][]int64{}
 	for _, name := range sortedKeys(s.Leases) {
 		l := s.Leases[name]
 		var opts []testkit.LeaseOption
 		if l.Rent != 0 {
 			opts = append(opts, testkit.Rent(core.Cents(l.Rent)))
 		}
-		ids[name] = e.Lease(orgs[l.Org], ids[l.Property], ids[l.Tenant], opts...).ID
+		for _, co := range l.CoTenants {
+			opts = append(opts, testkit.CoTenant(ids[co]))
+		}
+		lease := e.Lease(orgs[l.Org], ids[l.Property], ids[l.Tenant], opts...)
+		ids[name] = lease.ID
+		if l.RentRun {
+			leaseInvoices[name] = e.IssueRent(orgs[l.Org], lease)
+		}
+	}
+	for _, name := range sortedKeys(s.Payments) {
+		p := s.Payments[name]
+		invoices := leaseInvoices[p.Lease]
+		if p.Period >= len(invoices) {
+			t.Fatalf("payments.%s: lease %q has %d rent invoices", name, p.Lease, len(invoices))
+		}
+		ids[name] = e.Payment(orgs[p.Org], invoices[p.Period], core.Cents(p.Amount), testkit.Date("2026-01-06"))
 	}
 	for _, name := range sortedKeys(s.Projects) {
 		p := s.Projects[name]

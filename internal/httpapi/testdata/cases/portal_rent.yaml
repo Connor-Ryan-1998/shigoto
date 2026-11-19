@@ -1,0 +1,142 @@
+# Portal rent ledger: lease account, payment receipts and statements.
+#
+# Every tenant listed on a lease (primary or co-tenant) sees the whole
+# lease account, including payments against invoices addressed to the
+# primary tenant. Anyone else - another tenant, a client, a tenant of
+# another org - gets a bare 404. Staff download the same statements
+# through the property module with property_read.
+seed:
+  orgs: [acme, beta]
+  users:
+    owner: {org: acme, role: owner}
+    bookkeeper: {org: acme, role: bookkeeper}
+    tenant_a: {org: acme, role: tenant, contact: c_a}
+    co_tenant: {org: acme, role: tenant, contact: c_co}
+    tenant_b: {org: acme, role: tenant, contact: c_b}
+    client: {org: acme, role: client, contact: c_client}
+    beta_tenant: {org: beta, role: tenant, contact: c_beta}
+  contacts:
+    c_a: {org: acme, kind: tenant, name: Tenant A}
+    c_co: {org: acme, kind: tenant, name: Co Tenant}
+    c_b: {org: acme, kind: tenant, name: Tenant B}
+    c_client: {org: acme, kind: client, name: Client}
+    c_beta: {org: beta, kind: tenant, name: Beta Tenant}
+  properties:
+    prop: {org: acme}
+    prop_b: {org: acme}
+    beta_prop: {org: beta}
+  leases:
+    lease_a: {org: acme, property: prop, tenant: c_a, co_tenants: [c_co], rent: 60000, rent_run: true}
+    lease_b: {org: acme, property: prop_b, tenant: c_b, rent_run: true}
+    beta_lease: {org: beta, property: beta_prop, tenant: c_beta, rent_run: true}
+  payments:
+    pay_a: {org: acme, lease: lease_a, period: 0, amount: 60000}
+    pay_b: {org: acme, lease: lease_b, period: 0, amount: 50000}
+
+cases:
+  - name: primary tenant reads the lease account
+    as: tenant_a
+    request: {method: GET, path: "/api/v1/portal/acme/leases/{lease_a}/account"}
+    expect:
+      status: 200
+      body:
+        lease: {id: "{lease_a}"}
+        summary: {balance: 60000}
+        # Newest first: the 2026-01-12 rent, the 01-06 payment, the 01-05 rent.
+        entries:
+          - {kind: charge, debit: 60000, balance: 60000}
+          - {kind: payment, credit: 60000, payment_id: "{pay_a}", balance: 0}
+          - {kind: charge, debit: 60000, balance: 60000, description: "Rent 5–11 Jan 2026"}
+
+  - name: co-tenant sees the same account, including the primary's payment
+    as: co_tenant
+    request: {method: GET, path: "/api/v1/portal/acme/leases/{lease_a}/account"}
+    expect:
+      status: 200
+      body:
+        summary: {balance: 60000}
+        entries: [{kind: charge}, {kind: payment, payment_id: "{pay_a}"}, {kind: charge}]
+
+  - name: lease list carries dates and an active flag
+    as: tenant_a
+    request: {method: GET, path: /api/v1/portal/acme/leases}
+    expect: {status: 200, body: [{id: "{lease_a}", start_date: "2026-01-05", active: true}]}
+
+  - name: another tenant cannot read the lease account
+    as: [tenant_b, client, beta_tenant]
+    request: {method: GET, path: "/api/v1/portal/acme/leases/{lease_a}/account"}
+    expect: {status: 404, body: {error: not found}, exact: true}
+
+  - name: another org's lease is not found through this org
+    as: tenant_a
+    request: {method: GET, path: "/api/v1/portal/acme/leases/{beta_lease}/account"}
+    expect: {status: 404, body: {error: not found}, exact: true}
+
+  - name: tenant reads a receipt for a payment on their lease
+    as: [tenant_a, co_tenant]
+    request: {method: GET, path: "/api/v1/portal/acme/leases/{lease_a}/payments/{pay_a}/receipt"}
+    expect:
+      status: 200
+      body:
+        tenant_names: [Tenant A, Co Tenant]
+        payment: {id: "{pay_a}", amount: 60000, method: bank_transfer}
+        balance_after: 0
+
+  - name: a payment on another lease is not found through your lease
+    as: tenant_a
+    request: {method: GET, path: "/api/v1/portal/acme/leases/{lease_a}/payments/{pay_b}/receipt"}
+    expect: {status: 404, body: {error: not found}, exact: true}
+
+  - name: statement downloads as CSV
+    as: co_tenant
+    request: {method: GET, path: "/api/v1/portal/acme/leases/{lease_a}/statement.csv?from=2026-01-01&to=2026-12-31"}
+    expect:
+      status: 200
+      headers:
+        Content-Type: text/csv; charset=utf-8
+        Cache-Control: no-store
+        Content-Disposition: attachment; filename="rent-statement-1-test-st-testville-2026-01-01-to-2026-12-31.csv"
+
+  - name: statement downloads as PDF with the current financial year by default
+    as: tenant_a
+    request: {method: GET, path: "/api/v1/portal/acme/leases/{lease_a}/statement.pdf"}
+    expect:
+      status: 200
+      headers:
+        Content-Type: application/pdf
+        Cache-Control: no-store
+
+  - name: statement rejects a backwards range
+    as: tenant_a
+    request: {method: GET, path: "/api/v1/portal/acme/leases/{lease_a}/statement.csv?from=2027-01-01&to=2026-01-01"}
+    expect: {status: 422, body: {error: "invalid input: from must not be after to"}, exact: true}
+
+  - name: statement rejects a range over five years
+    as: tenant_a
+    request: {method: GET, path: "/api/v1/portal/acme/leases/{lease_a}/statement.csv?from=2020-01-01&to=2026-01-02"}
+    expect: {status: 422, body: {error: "invalid input: range must be at most 5 years"}, exact: true}
+
+  - name: statement rejects a malformed date
+    as: tenant_a
+    request: {method: GET, path: "/api/v1/portal/acme/leases/{lease_a}/statement.csv?from=yesterday"}
+    expect: {status: 422, body: {error: "invalid input: from must be YYYY-MM-DD"}, exact: true}
+
+  - name: other tenants cannot download the statement
+    as: [tenant_b, client]
+    request: {method: GET, path: "/api/v1/portal/acme/leases/{lease_a}/statement.pdf"}
+    expect: {status: 404, body: {error: not found}, exact: true}
+
+  - name: staff with property_read download the statement
+    as: [owner, bookkeeper]
+    request: {method: GET, path: "/api/v1/orgs/acme/leases/{lease_a}/statement.csv?from=2026-01-01&to=2026-12-31"}
+    expect: {status: 200, headers: {Content-Type: text/csv; charset=utf-8}}
+
+  - name: staff statement for another org's lease is not found
+    as: owner
+    request: {method: GET, path: "/api/v1/orgs/acme/leases/{beta_lease}/statement.pdf"}
+    expect: {status: 404}
+
+  - name: portal users cannot use the staff statement route
+    as: [tenant_a, client]
+    request: {method: GET, path: "/api/v1/orgs/acme/leases/{lease_a}/statement.pdf"}
+    expect: {status: 403, body: {error: forbidden}, exact: true}

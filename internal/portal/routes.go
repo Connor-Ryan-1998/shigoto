@@ -31,6 +31,7 @@ func RegisterRoutes(mux *http.ServeMux, d module.Deps) {
 	mux.Handle("GET /api/v1/portal/{org}/leases", d.Auth.RequirePortal(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		listLeases(w, r, d)
 	})))
+	registerRentRoutes(mux, d)
 }
 
 func listOrgs(w http.ResponseWriter, r *http.Request, d module.Deps) {

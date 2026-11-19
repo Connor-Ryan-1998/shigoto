@@ -5,6 +5,13 @@ seed:
   modules: {property: false, timesheets: false, reconciliation: false}
   users:
     owner: {org: acme, role: owner}
+    tenant: {org: acme, role: tenant, contact: c_tenant}
+  contacts:
+    c_tenant: {org: acme, kind: tenant, name: Tenant}
+  properties:
+    prop: {org: acme}
+  leases:
+    lease: {org: acme, property: prop, tenant: c_tenant}
 
 cases:
   - name: property routes are gone when property is disabled
@@ -30,4 +37,14 @@ cases:
   - name: time import is gone when timesheets is disabled
     as: owner
     request: {method: POST, path: /api/v1/orgs/acme/time-entries/import/preview}
+    expect: {status: 404, body: {error: not found}, exact: true}
+
+  - name: portal rent account is gone when property is disabled
+    as: tenant
+    request: {method: GET, path: "/api/v1/portal/acme/leases/{lease}/account"}
+    expect: {status: 404, body: {error: not found}, exact: true}
+
+  - name: portal statement is gone when property is disabled
+    as: tenant
+    request: {method: GET, path: "/api/v1/portal/acme/leases/{lease}/statement.pdf"}
     expect: {status: 404, body: {error: not found}, exact: true}
