@@ -12,6 +12,7 @@ import (
 	"shigoto/internal/config"
 	"shigoto/internal/db"
 	"shigoto/internal/sandbox"
+	"shigoto/internal/storage"
 )
 
 func adminPopulateSandbox(args []string) error {
@@ -35,7 +36,7 @@ func adminPopulateSandbox(args []string) error {
 	if err := db.Migrate(ctx, pool); err != nil {
 		return fmt.Errorf("migrating database: %w", err)
 	}
-	result, err := sandbox.Populate(ctx, pool, time.Now().In(cfg.Location))
+	result, err := sandbox.Populate(ctx, pool, storage.NewDisk(cfg.FilesDir), time.Now().In(cfg.Location))
 	if err != nil {
 		return err
 	}
@@ -69,7 +70,9 @@ func writeSandboxAccess(w io.Writer, baseURL string, result sandbox.Result) erro
 	}
 	fmt.Fprintln(&out, "Request a magic link on the normal login page; open its email in local Mailpit: http://localhost:8025")
 	fmt.Fprintln(&out, "Accounts ending in -empty exercise empty portals. Use separate browser profiles/private windows for different roles.")
-	fmt.Fprintln(&out, "Uploaded receipt bytes are not removed from disk by a reset.")
+	fmt.Fprintln(&out, "Try tenant@example.test: Rent includes write-off/recovery history; Repairs includes media, visits and entry-permission examples.")
+	fmt.Fprintln(&out, "Staff: open River Cottage → Maintenance in sbx-property. Demo media and phone numbers are fictional; do not call them.")
+	fmt.Fprintln(&out, "Old uploaded and demo media bytes are not removed from disk by a reset.")
 	_, err := io.WriteString(w, out.String())
 	return err
 }

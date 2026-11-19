@@ -84,6 +84,13 @@ func seedProperties(ctx context.Context, tx pgx.Tx, orgID int64, today time.Time
 				lines = append(lines, core.NewLine{Description: charge.Description, QuantityMilli: 1000, UnitAmount: charge.Amount, GSTCode: code, PropertyID: &p.ID})
 			}
 			state := states[j%len(states)]
+			if main && i == 0 {
+				if j == 0 {
+					state = "write_off"
+				} else if j == 1 {
+					state = "recovered"
+				}
+			}
 			if period.Start.After(today) {
 				state = "draft"
 			}

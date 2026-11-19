@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"shigoto/internal/auth"
+	"shigoto/internal/storage"
 	"shigoto/internal/testkit"
 )
 
@@ -82,8 +83,11 @@ func TestPopulateScenarios(t *testing.T) {
 func TestPopulatePortalVisibility(t *testing.T) {
 	e := testkit.New(t)
 	pool := e.Pool
-	populateTest(t, pool)
-	h := e.Handler(testkit.OnlyModules("property", "timesheets", "reconciliation"))
+	store := storage.NewDisk(t.TempDir())
+	if _, err := Populate(e.Ctx, pool, store, testDay); err != nil {
+		t.Fatal(err)
+	}
+	h := e.Handler(testkit.OnlyModules("property", "timesheets", "reconciliation"), testkit.Store(store))
 	for _, name := range []string{"tenant", "tenant-other", "tenant-empty", "client", "client-empty", "tenant-beta", "client-beta"} {
 		t.Run(name, func(t *testing.T) {
 			token, err := auth.RequestMagicLink(context.Background(), pool, name+"@example.test")
@@ -139,6 +143,43 @@ func TestPopulatePortalVisibility(t *testing.T) {
 			get("/api/v1/portal/"+other+"/invoices", 404)
 			get("/api/v1/orgs/"+org+"/contacts", 403)
 			if strings.HasPrefix(name, "tenant") {
+				repairs := get("/api/v1/portal/"+org+"/maintenance", 200)
+				var data struct {
+					Tickets []struct {
+						ID int64 `json:"id"`
+					} `json:"tickets"`
+				}
+				if err := json.Unmarshal(repairs.Body.Bytes(), &data); err != nil {
+					t.Fatal(err)
+				}
+				if (len(data.Tickets) == 0) != empty {
+					t.Fatalf("repair count=%d, empty=%t", len(data.Tickets), empty)
+				}
+				for _, ticket := range data.Tickets {
+					if got := count(t, pool, `SELECT count(*) FROM maintenance_tickets t JOIN lease_tenants lt ON lt.lease_id=t.lease_id
+						JOIN contacts c ON c.id=lt.contact_id WHERE t.id=$1 AND c.email=$2`, ticket.ID, name+"@example.test"); got != 1 {
+						t.Fatal("portal exposed another tenant's repair")
+					}
+					base := fmt.Sprintf("/api/v1/portal/%s/maintenance/%d", org, ticket.ID)
+					detail := get(base, 200)
+					if strings.Contains(detail.Body.String(), "Sandbox internal note:") {
+						t.Fatal("portal exposed internal note")
+					}
+					var media struct {
+						Files []struct {
+							ID int64 `json:"id"`
+						} `json:"files"`
+					}
+					if err := json.Unmarshal(detail.Body.Bytes(), &media); err != nil {
+						t.Fatal(err)
+					}
+					for _, file := range media.Files {
+						response := get(fmt.Sprintf("%s/files/%d?inline=1", base, file.ID), 200)
+						if response.Body.Len() == 0 {
+							t.Fatal("seeded media served no bytes")
+						}
+					}
+				}
 				rr = get("/api/v1/portal/"+org+"/leases", 200)
 				var leases []struct {
 					ID int64 `json:"id"`
@@ -184,7 +225,7 @@ func TestPopulateRefusesExternalRecord(t *testing.T) {
 	// An invalid cross-org relationship can exist in SQL even though domain APIs reject it.
 	mustExec(t, pool, `INSERT INTO invoices (org_id,contact_id,source) SELECT o.id,c.id,'manual' FROM orgs o CROSS JOIN contacts c WHERE o.slug='unrelated' LIMIT 1`)
 	before := count(t, pool, `SELECT count(*) FROM invoices`)
-	if _, err := Populate(context.Background(), pool, testDay); err == nil {
+	if _, err := Populate(context.Background(), pool, storage.NewDisk(t.TempDir()), testDay); err == nil {
 		t.Fatal("reset accepted an external dependency")
 	}
 	if n := count(t, pool, `SELECT count(*) FROM invoices`); n != before {

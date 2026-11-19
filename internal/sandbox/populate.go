@@ -5,14 +5,18 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"shigoto/internal/auth"
 	"shigoto/internal/core"
+	"shigoto/internal/storage"
 )
 
 // Account describes how to access one committed sandbox identity.
@@ -52,33 +56,74 @@ var accountDefinitions = []struct {
 }
 
 // Populate replaces explicitly owned sandbox records in the configured database.
-// All writes, including replacement, commit together; external references abort
-// the reset instead of deleting unrelated data. It never contacts providers.
-func Populate(ctx context.Context, pool *pgxpool.Pool, today time.Time) (Result, error) {
+// Database writes, including replacement, commit together; external references
+// abort the reset instead of deleting unrelated data. It never contacts providers.
+func Populate(ctx context.Context, pool *pgxpool.Pool, store storage.Store, today time.Time) (Result, error) {
 	if today.IsZero() {
 		return Result{}, fmt.Errorf("population date is required")
 	}
+	if store == nil {
+		return Result{}, fmt.Errorf("sandbox file store is required")
+	}
+	location := today.Location()
 	today = time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, time.UTC)
 	tx, err := pool.Begin(ctx)
 	if err != nil {
 		return Result{}, err
 	}
-	defer tx.Rollback(context.Background()) //nolint:errcheck // no-op after commit
+	return populateTransaction(ctx, tx, store, today, location)
+}
+
+func populateTransaction(ctx context.Context, tx pgx.Tx, store storage.Store, today time.Time, location *time.Location) (Result, error) {
+	var media []*core.Staged
+	keepMedia := false
+	defer func() {
+		_ = tx.Rollback(context.Background()) // no-op after commit
+		for _, staged := range media {
+			if err := staged.Abort(); err != nil {
+				slog.Error("discarding sandbox staged media", "error", err)
+			}
+			if !keepMedia {
+				// These keys belong to newly allocated org IDs, never the
+				// previous sandbox or unrelated organisations.
+				if err := store.Delete(context.Background(), storage.Key{OrgID: staged.OrgID, SHA256: staged.SHA256}); err != nil {
+					slog.Error("discarding failed sandbox media", "org_id", staged.OrgID, "error", err)
+				}
+			}
+		}
+	}()
 	// Transaction-scoped: another invocation waits, then sees the committed registry.
 	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(736449, 1)`); err != nil {
 		return Result{}, err
 	}
-	result, err := populate(ctx, tx, today)
+	result, err := populate(ctx, tx, today, location)
 	if err != nil {
 		return Result{}, fmt.Errorf("populate sandbox (no changes committed): %w", err)
 	}
+	media, err = seedMaintenanceMedia(ctx, tx, store, result.Orgs)
+	if err != nil {
+		return Result{}, fmt.Errorf("populate sandbox media (no changes committed): %w", err)
+	}
+	for _, staged := range media {
+		if err := staged.Commit(ctx); err != nil {
+			return Result{}, fmt.Errorf("storing sandbox media (no changes committed): %w", err)
+		}
+	}
 	if err := tx.Commit(ctx); err != nil {
+		var serverError *pgconn.PgError
+		if !errors.Is(err, pgx.ErrTxCommitRollback) && !errors.As(err, &serverError) {
+			// A lost reply can hide a successful COMMIT. Keeping tiny demo
+			// blobs is safer than deleting bytes referenced by committed rows.
+			keepMedia = true
+			return Result{}, fmt.Errorf("sandbox commit outcome unknown; media retained; rerun populate-sbx to restore access details: %w", err)
+		}
 		return Result{}, err
 	}
+	keepMedia = true
 	return result, nil
 }
 
-func populate(ctx context.Context, tx pgx.Tx, today time.Time) (Result, error) {
+func populate(ctx context.Context, tx pgx.Tx, today time.Time, location *time.Location) (Result, error) {
 	if err := checkCollisions(ctx, tx); err != nil {
 		return Result{}, err
 	}
@@ -141,7 +186,7 @@ func populate(ctx context.Context, tx pgx.Tx, today time.Time) (Result, error) {
 		result.Accounts = append(result.Accounts, account)
 		users[def.name] = userID
 	}
-	if err := seedScenarios(ctx, tx, today, result.Orgs, users); err != nil {
+	if err := seedScenarios(ctx, tx, today, location, result.Orgs, users); err != nil {
 		return Result{}, err
 	}
 	return result, nil

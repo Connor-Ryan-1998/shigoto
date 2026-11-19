@@ -10,7 +10,7 @@ import (
 	"shigoto/internal/core"
 )
 
-func seedScenarios(ctx context.Context, tx pgx.Tx, today time.Time, orgs []core.Org, users map[string]int64) error {
+func seedScenarios(ctx context.Context, tx pgx.Tx, today time.Time, location *time.Location, orgs []core.Org, users map[string]int64) error {
 	contacts := make(map[string]int64)
 	for _, def := range accountDefinitions {
 		if def.role != "tenant" && def.role != "client" {
@@ -27,6 +27,7 @@ func seedScenarios(ctx context.Context, tx pgx.Tx, today time.Time, orgs []core.
 		if _, err := core.UpdateSettings(ctx, tx, org.ID, core.OrgSettings{
 			Name: org.Name, GSTRegistered: i == 0, BASFrequency: "quarterly", InvoiceLeadDays: 7,
 			BankBSB: "000-000", BankAccount: "00000000", PayID: "sandbox@example.test",
+			EmergencyPhone: "02 5550 0100",
 		}); err != nil {
 			return err
 		}
@@ -37,6 +38,18 @@ func seedScenarios(ctx context.Context, tx pgx.Tx, today time.Time, orgs []core.
 		properties, err := seedProperties(ctx, tx, org.ID, today, tenant, contacts["tenant-other"], i == 0)
 		if err != nil {
 			return fmt.Errorf("property scenarios: %w", err)
+		}
+		tenantUser := users["tenant"]
+		if i == 1 {
+			tenantUser = users["tenant-beta"]
+		}
+		if err := seedMaintenance(ctx, tx, org.ID, today, location, properties[0].ID, tenant, tenantUser, actor, i == 0); err != nil {
+			return fmt.Errorf("maintenance scenarios: %w", err)
+		}
+		if i == 0 {
+			if err := seedMaintenance(ctx, tx, org.ID, today, location, properties[1].ID, contacts["tenant-other"], users["tenant-other"], actor, false); err != nil {
+				return fmt.Errorf("other tenant maintenance: %w", err)
+			}
 		}
 		projectID, err := seedTimesheets(ctx, tx, org.ID, today, client, actor, i == 0)
 		if err != nil {
@@ -102,6 +115,17 @@ func seedInvoice(ctx context.Context, tx pgx.Tx, orgID int64, in core.NewInvoice
 		}
 	case "void":
 		return core.VoidInvoice(ctx, tx, orgID, inv.ID)
+	case "write_off", "recovered":
+		if _, err := core.MarkInvoiceUncollectible(ctx, tx, orgID, inv.ID, issued.AddDate(0, 0, 1)); err != nil {
+			return core.Invoice{}, err
+		}
+		if state == "recovered" {
+			if _, _, err := core.RecordPayment(ctx, tx, orgID, core.NewPayment{
+				InvoiceID: inv.ID, Amount: inv.Total / 2, PaidOn: issued.AddDate(0, 0, 2), Method: "bank_transfer",
+			}); err != nil {
+				return core.Invoice{}, err
+			}
+		}
 	}
 	return core.GetInvoice(ctx, tx, orgID, inv.ID)
 }

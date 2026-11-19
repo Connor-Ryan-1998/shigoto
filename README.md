@@ -287,6 +287,25 @@ unbilled time, expenses, bank imports and matched/unmatched lines. More than 60
 invoices cover drafts, upcoming/overdue balances, partial/full payments and voids.
 Dates are relative to the population day in `SHIGOTO_TIMEZONE`.
 
+In `sbx-property`, **River Cottage → Maintenance** contains new, viewed,
+assigned, scheduled, completed and cancelled repairs. Scheduled examples include
+unconfirmed visits, tenant-home access, permitted entry, withdrawn permission
+and a request for a different time. Each has availability and a fictional
+supplier; reviewed repairs contain shared messages and staff-only notes.
+Garden Terrace and `sbx-consulting` have separate tenant repair examples.
+Empty tenant accounts stay empty.
+
+Sign in as `tenant@example.test` to exercise these examples under **Repairs**.
+The new **Kitchen tap leaking** request includes an illustrated PNG, a tiny MP4
+and a spoken demo voice note. These fictional fixtures are bundled in the
+binary and written into `SHIGOTO_FILES_DIR`; population needs no media downloads
+or local encoders. The emergency phone is a fictional example, not an emergency
+service; **do not call it**.
+
+River Cottage's **Rent** account also includes a written-off rent invoice and
+a separate write-off with partial recovery. Existing partial/full payments
+provide printable receipts and PDF/CSV statement examples.
+
 After success, the command prints local URLs and fresh owner/staff/bookkeeper
 passwords. The owner can switch between both organisations. Portal accounts have
 **no password**: open the normal login page, request a magic link for one of the
@@ -297,8 +316,12 @@ other tenants exercise same-organisation and cross-organisation isolation.
 
 Population sends no mail and calls no payment providers. Keep local SMTP pointed
 at Mailpit and do not configure live payment credentials for either sandbox
-organisation. Receipt uploads made during testing lose their database references
-on reset; uploaded bytes are not deleted from disk by this command.
+organisation. Uploaded files (including bundled demo media) lose their database
+references on reset; old bytes are not deleted from disk by this command.
+If a new population fails before commit, it rolls back database changes and
+discards that attempt's media, preserving the previous sandbox. If a database
+connection fails during commit, the outcome may be unknown: media is retained
+to avoid broken file references. Rerun `populate-sbx` to restore known access details.
 
 ## Money and GST rounding
 

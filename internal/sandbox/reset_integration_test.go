@@ -9,8 +9,67 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"shigoto/internal/storage"
 	"shigoto/internal/testkit"
 )
+
+func TestPopulateResetsMaintenanceOnlyInOwnedOrgs(t *testing.T) {
+	e := testkit.New(t)
+	result := populateTest(t, e.Pool)
+	other := e.Org("unrelated")
+	e.Property(other)
+	var tickets []int64
+	for _, org := range []int64{result.Orgs[0].ID, other.ID} {
+		deps := addResetDependencies(t, e.Pool, org, fmt.Sprintf("maintenance-%d@example.test", org))
+		var ticket int64
+		if err := e.Pool.QueryRow(e.Ctx, `INSERT INTO maintenance_tickets
+			(org_id,ref_no,property_id,title,description,category,urgency)
+			SELECT $1,999,id,'Tester repair','Fictional repair','other','routine' FROM properties WHERE org_id=$1 LIMIT 1
+			RETURNING id`, org).Scan(&ticket); err != nil {
+			t.Fatal(err)
+		}
+		tickets = append(tickets, ticket)
+		mustExec(t, e.Pool, `INSERT INTO maintenance_ticket_files (ticket_id,file_id) VALUES ($1,$2)`, ticket, deps.file)
+		mustExec(t, e.Pool, `INSERT INTO maintenance_events (org_id,ticket_id,kind,tenant_visible) VALUES ($1,$2,'created',true)`, org, ticket)
+		mustExec(t, e.Pool, `INSERT INTO maintenance_availability (org_id,ticket_id,date,slot) VALUES ($1,$2,$3,'morning')`, org, ticket, testDay)
+		mustExec(t, e.Pool, `INSERT INTO maintenance_pending_files (org_id,file_id,user_id) VALUES ($1,$2,$3)`, org, deps.file, deps.user)
+		mustExec(t, e.Pool, `INSERT INTO contacts (org_id,kind,name) VALUES ($1,'supplier','Test tradesperson')`, org)
+		mustExec(t, e.Pool, `INSERT INTO maintenance_visits (org_id,ticket_id,supplier_contact_id,starts_at,ends_at)
+			SELECT $1,$2,id,$3::timestamptz,$3::timestamptz+interval '1 hour' FROM contacts WHERE org_id=$1 AND kind='supplier' LIMIT 1`, org, ticket, testDay)
+	}
+	populateTest(t, e.Pool)
+	for _, table := range []string{"maintenance_ticket_files", "maintenance_events", "maintenance_availability", "maintenance_visits"} {
+		if got := count(t, e.Pool, `SELECT count(*) FROM `+table+` WHERE ticket_id=$1`, tickets[0]); got != 0 {
+			t.Errorf("%s retained old sandbox rows", table)
+		}
+		if got := count(t, e.Pool, `SELECT count(*) FROM `+table+` WHERE ticket_id=$1`, tickets[1]); got != 1 {
+			t.Errorf("%s changed unrelated rows", table)
+		}
+	}
+	if got := count(t, e.Pool, `SELECT count(*) FROM maintenance_pending_files WHERE org_id=$1`, other.ID); got != 1 {
+		t.Fatal("unrelated pending upload disappeared")
+	}
+}
+
+func TestPopulateRefusesExternalMaintenanceReference(t *testing.T) {
+	e := testkit.New(t)
+	result := populateTest(t, e.Pool)
+	other := e.Org("unrelated")
+	mustExec(t, e.Pool, `INSERT INTO maintenance_tickets (org_id,ref_no,property_id,title,description,category,urgency)
+		SELECT $1,999,id,'Shared repair','Fictional repair','other','routine' FROM properties WHERE org_id=$1 LIMIT 1`, result.Orgs[0].ID)
+	mustExec(t, e.Pool, `INSERT INTO maintenance_events (org_id,ticket_id,kind,tenant_visible)
+		SELECT $1,id,'comment',true FROM maintenance_tickets WHERE org_id=$2 AND ref_no=999`, other.ID, result.Orgs[0].ID)
+	before := count(t, e.Pool, `SELECT count(*) FROM contacts`)
+	if _, err := Populate(e.Ctx, e.Pool, storage.NewDisk(t.TempDir()), testDay); err == nil {
+		t.Fatal("reset accepted an unrelated maintenance reference")
+	}
+	if got := count(t, e.Pool, `SELECT count(*) FROM maintenance_events WHERE org_id=$1`, other.ID); got != 1 {
+		t.Fatal("reset deleted unrelated maintenance event")
+	}
+	if got := count(t, e.Pool, `SELECT count(*) FROM contacts`); got != before {
+		t.Fatal("failed reset changed contacts")
+	}
+}
 
 func TestPopulateRefusesExternalExpenseLine(t *testing.T) {
 	e := testkit.New(t)
@@ -21,7 +80,7 @@ func TestPopulateRefusesExternalExpenseLine(t *testing.T) {
 		SELECT $1,e.id,c.id,1000,'FRE',0 FROM expenses e CROSS JOIN categories c
 		WHERE e.org_id=$2 AND c.org_id=$1 LIMIT 1`, other.ID, result.Orgs[0].ID)
 	before := count(t, pool, `SELECT count(*) FROM expenses`)
-	if _, err := Populate(context.Background(), pool, testDay); err == nil {
+	if _, err := Populate(context.Background(), pool, storage.NewDisk(t.TempDir()), testDay); err == nil {
 		t.Fatal("reset accepted a cascading external expense line")
 	}
 	if got := count(t, pool, `SELECT count(*) FROM expense_lines WHERE org_id=$1`, other.ID); got != 1 {
@@ -124,7 +183,7 @@ func TestPopulateRefusesExternalFileReference(t *testing.T) {
 	other := e.Org("unrelated")
 	mustExec(t, pool, `INSERT INTO expenses (org_id,spent_on,description,receipt_file_id) VALUES ($1,$2,'External file reference',$3)`, other.ID, testDay, owned.file)
 	before := count(t, pool, `SELECT count(*) FROM expenses`)
-	if _, err := Populate(context.Background(), pool, testDay); err == nil {
+	if _, err := Populate(context.Background(), pool, storage.NewDisk(t.TempDir()), testDay); err == nil {
 		t.Fatal("reset accepted external receipt reference")
 	}
 	if got := count(t, pool, `SELECT count(*) FROM expenses`); got != before {

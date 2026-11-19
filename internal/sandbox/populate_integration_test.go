@@ -11,6 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"shigoto/internal/storage"
 	"shigoto/internal/testkit"
 )
 
@@ -34,7 +35,7 @@ func count(t *testing.T, pool *pgxpool.Pool, sql string, args ...any) int {
 
 func populateTest(t *testing.T, pool *pgxpool.Pool) Result {
 	t.Helper()
-	r, err := Populate(context.Background(), pool, testDay)
+	r, err := Populate(context.Background(), pool, storage.NewDisk(t.TempDir()), testDay)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +52,7 @@ func TestPopulateCollision(t *testing.T) {
 			} else {
 				mustExec(t, pool, `INSERT INTO users (email, name) VALUES ('OWNER@EXAMPLE.TEST', 'Existing person')`)
 			}
-			_, err := Populate(context.Background(), pool, testDay)
+			_, err := Populate(context.Background(), pool, storage.NewDisk(t.TempDir()), testDay)
 			if err == nil || !strings.Contains(err.Error(), "collision") {
 				t.Fatalf("expected collision refusal, got %v", err)
 			}
@@ -93,7 +94,7 @@ func TestPopulateRefusesSharedUser(t *testing.T) {
 	org := e.Org("existing")
 	mustExec(t, pool, `INSERT INTO memberships (user_id, org_id, role) SELECT id, $1, 'staff' FROM users WHERE email='owner@example.test'`, org.ID)
 	before := count(t, pool, `SELECT count(*) FROM contacts`)
-	if _, err := Populate(context.Background(), pool, testDay); err == nil {
+	if _, err := Populate(context.Background(), pool, storage.NewDisk(t.TempDir()), testDay); err == nil {
 		t.Fatal("reset accepted a shared identity")
 	}
 	if n := count(t, pool, `SELECT count(*) FROM memberships WHERE org_id=$1`, org.ID); n != 1 {
@@ -111,7 +112,7 @@ func TestPopulateRollback(t *testing.T) {
 	mustExec(t, pool, `UPDATE orgs SET name='Tester edit' WHERE slug='sbx-property'`)
 	mustExec(t, pool, `CREATE FUNCTION fail_sandbox() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'injected population failure'; END $$`)
 	mustExec(t, pool, `CREATE TRIGGER fail_sandbox BEFORE INSERT ON users FOR EACH ROW EXECUTE FUNCTION fail_sandbox()`)
-	if _, err := Populate(context.Background(), pool, testDay); err == nil {
+	if _, err := Populate(context.Background(), pool, storage.NewDisk(t.TempDir()), testDay); err == nil {
 		t.Fatal("expected injected failure")
 	}
 	if n := count(t, pool, `SELECT count(*) FROM orgs WHERE name='Tester edit'`); n != 1 {
@@ -128,7 +129,7 @@ func TestPopulateConcurrent(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, err := Populate(context.Background(), pool, testDay)
+			_, err := Populate(context.Background(), pool, storage.NewDisk(t.TempDir()), testDay)
 			errs <- err
 		}()
 	}

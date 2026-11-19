@@ -48,6 +48,11 @@ func reset(ctx context.Context, tx pgx.Tx) error {
 			return err
 		}
 	}
+	// Ticket attachments have no org_id; ownership follows their ticket.
+	if _, err := tx.Exec(ctx, `DELETE FROM maintenance_ticket_files WHERE ticket_id IN
+		(SELECT id FROM maintenance_tickets WHERE org_id IN (SELECT org_id FROM sandbox_orgs))`); err != nil {
+		return err
+	}
 	// These three child tables have no org_id. Select ownership via their lease.
 	for _, table := range []string{"lease_tenants", "lease_rent_changes", "lease_charges"} {
 		if _, err := tx.Exec(ctx, `DELETE FROM `+pgx.Identifier{table}.Sanitize()+` WHERE lease_id IN (SELECT id FROM leases WHERE org_id IN (SELECT org_id FROM sandbox_orgs))`); err != nil {
@@ -59,6 +64,7 @@ func reset(ctx context.Context, tx pgx.Tx) error {
 		return err
 	}
 	for _, table := range []string{
+		"maintenance_availability", "maintenance_visits", "maintenance_events", "maintenance_pending_files", "maintenance_tickets",
 		"invites", "audit_log", "webhook_events", "memberships", "time_entries", "rent_periods",
 		"payments", "payouts", "expense_lines", "expenses", "invoice_lines", "invoices", "invoice_counters",
 		"leases", "project_tasks", "projects", "properties", "bank_lines", "bank_imports", "bank_accounts",
