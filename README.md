@@ -176,6 +176,8 @@ The server is configured by environment variables, all prefixed `SHIGOTO_`:
 | `SHIGOTO_DATABASE_URL` | yes | | Postgres connection URL. |
 | `SHIGOTO_MODULES` | no | all of `property,timesheets,reconciliation` | Comma list of modules to enable. |
 | `SHIGOTO_FILES_DIR` | no | `./data/files` | Directory for uploaded files. |
+| `SHIGOTO_UPLOAD_MAX_BYTES` | no | `1073741824` (1 GiB) | Per-file cap for maintenance photo/video/voice uploads; `0` = unlimited. Document uploads stay capped at 10 MiB. |
+| `SHIGOTO_UPLOAD_MIN_FREE_BYTES` | no | `5368709120` (5 GiB) | Uploads are refused with 507 when the files volume has less free space than this. |
 | `SHIGOTO_BASE_URL` | yes | | Public base URL, used for webhooks and links. |
 | `SHIGOTO_TIMEZONE` | no | `Australia/Brisbane` | Timezone invoice dates (issue_date, due_date) are calculated in. |
 | `SHIGOTO_SCHEDULER` | no | `on` | `on` or `off`. Enables the in-process hourly scheduler (rent runs and session pruning). |
