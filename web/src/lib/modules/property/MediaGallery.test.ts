@@ -21,6 +21,15 @@ describe('MediaGallery', () => {
 		expect(screen.getAllByRole('link', { name: /Download/ })).toHaveLength(3);
 	});
 
+	it('plays a recorded WebM voice note as audio', () => {
+		const { container } = render(MediaGallery, {
+			base: '/f',
+			files: [{ id: 4, mime: 'video/webm', size_bytes: 10, original_name: 'voice-note-2026.webm' }, { id: 5, mime: 'video/webm', size_bytes: 10, original_name: 'clip.webm' }]
+		});
+		expect(container.querySelectorAll('audio')).toHaveLength(1);
+		expect(container.querySelectorAll('video')).toHaveLength(1);
+	});
+
 	it('says when there is no media', () => {
 		render(MediaGallery, { base: '/x', files: [] });
 		expect(screen.getByText('No photos or recordings.')).toBeTruthy();

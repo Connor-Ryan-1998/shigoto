@@ -30,6 +30,21 @@ describe('[org] dashboard page empty/settled state', () => {
 		expect(screen.queryByText('Open invoices')).toBeNull();
 	});
 
+	it('still shows module cards such as open repairs for an org with no invoices', async () => {
+		apiMock.mockResolvedValue({
+			core: { open_count: 0, open_outstanding: 0, overdue_count: 0, overdue_outstanding: 0, draft_count: 0, invoice_count: 0 },
+			modules: {
+				property: {
+					arrears_total: 0, unissued_total: 0, bonds_unlodged_overdue: 0, insurance_renewing_soon: 0,
+					repairs: { open_count: 1, items: [{ ticket_id: 7, property_id: 3, property_address: '12 Banksia St', ref: 'R-0001', title: 'Burst pipe', urgency: 'urgent', status: 'new' }] }
+				}
+			}
+		});
+		render(Page);
+		expect(await screen.findByText('No invoices yet — create one')).toBeTruthy();
+		expect(await screen.findByRole('heading', { name: 'Repairs' })).toBeTruthy();
+	});
+
 	it('shows the tiles, not the empty state, for a settled org (invoice history, nothing open)', async () => {
 		apiMock.mockResolvedValue({
 			core: {

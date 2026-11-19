@@ -84,10 +84,14 @@
 			<Button onclick={load}>Retry</Button>
 		{/snippet}
 	</EmptyState>
-{:else if isEmpty}
-	<EmptyState title="No invoices yet — create one" />
 {:else if core}
-	<DashboardCore {core} org={page.params.org ?? ''} />
+	{#if isEmpty}
+		<EmptyState title="No invoices yet — create one" />
+	{:else}
+		<DashboardCore {core} org={page.params.org ?? ''} />
+	{/if}
+	<!-- Module cards show even before the first invoice: an open urgent
+	     repair must never hide behind the onboarding state. -->
 	{#if cards.length > 0}
 		<div class="mt-4 grid grid-cols-[repeat(auto-fit,minmax(16rem,1fr))] gap-4">
 			{#each cards as { name, Component, data } (name)}

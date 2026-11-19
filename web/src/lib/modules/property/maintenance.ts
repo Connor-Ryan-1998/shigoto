@@ -89,7 +89,11 @@ export function isOpen(t: Pick<Ticket, 'status'>): boolean {
 	return t.status !== 'completed' && t.status !== 'cancelled';
 }
 
-export function mediaKind(mime: string): 'image' | 'video' | 'audio' | 'other' {
+// mediaKind picks the player for a file. WebM's header can't tell audio
+// from video, so a WebM named like a voice note (VoiceRecorder names clips
+// voice-note-*) or with an audio extension gets the audio player.
+export function mediaKind(mime: string, name = ''): 'image' | 'video' | 'audio' | 'other' {
+	if (mime === 'video/webm' && /^voice|\.(weba|ogg|opus)$/i.test(name)) return 'audio';
 	if (mime.startsWith('image/')) return 'image';
 	if (mime.startsWith('video/')) return 'video';
 	if (mime.startsWith('audio/')) return 'audio';
