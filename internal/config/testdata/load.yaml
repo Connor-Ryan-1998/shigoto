@@ -13,6 +13,8 @@
     smtp_host: ""
     trusted_proxy: ""
     oidc_configured: false
+    upload_max_bytes: 1073741824
+    upload_min_free_bytes: 5368709120
 
 - name: unknown module rejected
   env: {SHIGOTO_MODULES: "property,payroll"}
@@ -102,3 +104,23 @@
   want:
     oidc_configured: true
     oidc_scopes: [openid, email, profile]
+
+- name: upload max zero means unlimited
+  env: {SHIGOTO_UPLOAD_MAX_BYTES: "0"}
+  want: {upload_max_bytes: 0}
+
+- name: upload max custom
+  env: {SHIGOTO_UPLOAD_MAX_BYTES: "2147483648", SHIGOTO_UPLOAD_MIN_FREE_BYTES: "0"}
+  want: {upload_max_bytes: 2147483648, upload_min_free_bytes: 0}
+
+- name: upload max negative rejected
+  env: {SHIGOTO_UPLOAD_MAX_BYTES: "-1"}
+  err: SHIGOTO_UPLOAD_MAX_BYTES
+
+- name: upload max not a number rejected
+  env: {SHIGOTO_UPLOAD_MAX_BYTES: abc}
+  err: SHIGOTO_UPLOAD_MAX_BYTES
+
+- name: upload min free negative rejected
+  env: {SHIGOTO_UPLOAD_MIN_FREE_BYTES: "-5"}
+  err: SHIGOTO_UPLOAD_MIN_FREE_BYTES

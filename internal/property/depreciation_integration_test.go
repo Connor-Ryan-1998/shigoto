@@ -9,12 +9,13 @@ import (
 
 	"shigoto/internal/core"
 	"shigoto/internal/property"
+	"shigoto/internal/storage"
 	"shigoto/internal/testkit"
 )
 
 func saveFile(e *testkit.Env, org core.Org, name string, data []byte) core.File {
 	e.T.Helper()
-	f, err := core.SaveFile(e.Ctx, e.Pool, org.ID, e.T.TempDir(), name, bytes.NewReader(data))
+	f, err := core.SaveFile(e.Ctx, e.Pool, storage.NewDisk(e.T.TempDir()), org.ID, name, bytes.NewReader(data), core.DocumentPolicy)
 	if err != nil {
 		e.T.Fatalf("SaveFile: %v", err)
 	}

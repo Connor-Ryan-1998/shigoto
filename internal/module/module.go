@@ -22,6 +22,7 @@ import (
 	"shigoto/internal/billing"
 	"shigoto/internal/config"
 	"shigoto/internal/core"
+	"shigoto/internal/storage"
 )
 
 // Deps holds the dependencies a module's Routes func needs to register its
@@ -31,6 +32,8 @@ type Deps struct {
 	Auth    *auth.Auth
 	Cfg     config.Config
 	Billing *billing.Service
+	// Store holds uploaded file bytes.
+	Store storage.Store
 }
 
 // Module is a feature module that contributes routes to the API, gated by

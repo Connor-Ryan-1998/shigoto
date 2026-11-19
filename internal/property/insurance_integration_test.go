@@ -12,6 +12,7 @@ import (
 
 	"shigoto/internal/core"
 	"shigoto/internal/property"
+	"shigoto/internal/storage"
 	"shigoto/internal/testkit"
 )
 
@@ -71,7 +72,7 @@ func TestInsuranceRejectsInvalid(t *testing.T) {
 	org := e.Org("acme")
 	p := e.Property(org)
 	other := e.Org("other")
-	otherFile, err := core.SaveFile(e.Ctx, e.Pool, other.ID, t.TempDir(), "p.png", bytes.NewReader(testkit.PNG))
+	otherFile, err := core.SaveFile(e.Ctx, e.Pool, storage.NewDisk(t.TempDir()), other.ID, "p.png", bytes.NewReader(testkit.PNG), core.DocumentPolicy)
 	if err != nil {
 		t.Fatal(err)
 	}

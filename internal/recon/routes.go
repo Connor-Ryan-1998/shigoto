@@ -505,7 +505,7 @@ func updateCategoryHandler(w http.ResponseWriter, r *http.Request, d module.Deps
 // --- files ---
 
 func uploadFileHandler(w http.ResponseWriter, r *http.Request, d module.Deps) {
-	created, ok := module.HandleUpload(w, r, d, nil)
+	created, ok := module.HandleUpload(w, r, d, core.DocumentPolicy, nil)
 	if !ok {
 		return
 	}
@@ -524,7 +524,7 @@ func downloadFileHandler(w http.ResponseWriter, r *http.Request, d module.Deps) 
 		module.WriteCoreError(w, err)
 		return
 	}
-	module.ServeFile(w, f, d.Cfg.FilesDir)
+	module.ServeFile(w, f, d.Store)
 }
 
 // --- expenses ---

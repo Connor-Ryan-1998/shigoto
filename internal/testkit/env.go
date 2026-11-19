@@ -20,6 +20,7 @@ import (
 	"shigoto/internal/httpapi"
 	"shigoto/internal/mail"
 	"shigoto/internal/payments"
+	"shigoto/internal/storage"
 )
 
 // Env is one test's isolated database plus the context its helpers use.
@@ -44,6 +45,7 @@ type handlerConfig struct {
 	billing     *billing.Service
 	authOptions []auth.Option
 	getEnv      func(string) string
+	store       storage.Store
 }
 
 // HandlerOption customises the handler Env.Handler builds.
@@ -90,6 +92,12 @@ func GetEnv(f func(string) string) HandlerOption {
 	return func(c *handlerConfig) { c.getEnv = f }
 }
 
+// Store sets the handler's file store. The default is a disk store in a
+// temporary directory.
+func Store(s storage.Store) HandlerOption {
+	return func(c *handlerConfig) { c.store = s }
+}
+
 // AuthOptions passes options to auth.New.
 func AuthOptions(opts ...auth.Option) HandlerOption {
 	return func(c *handlerConfig) { c.authOptions = append(c.authOptions, opts...) }
@@ -111,9 +119,13 @@ func (e *Env) Handler(opts ...HandlerOption) http.Handler {
 		opt(&c)
 	}
 	return httpapi.New(httpapi.Deps{
-		Pool:     e.Pool,
-		Auth:     auth.New(e.Pool, false, c.authOptions...),
-		Cfg:      config.Config{Modules: c.modules, BaseURL: "https://shigoto.example", FilesDir: e.T.TempDir()},
+		Pool: e.Pool,
+		Auth: auth.New(e.Pool, false, c.authOptions...),
+		Cfg: config.Config{
+			Modules: c.modules, BaseURL: "https://shigoto.example", FilesDir: e.T.TempDir(),
+			UploadMaxBytes: 1 << 30, UploadMinFreeBytes: 1 << 20,
+		},
+		Store:    c.store,
 		GetEnv:   c.getEnv,
 		Payments: c.payments,
 		Billing:  c.billing,

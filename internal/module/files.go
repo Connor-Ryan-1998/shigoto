@@ -1,11 +1,12 @@
 package module
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
-	"os"
 	"strings"
 	"unicode"
 
@@ -13,6 +14,7 @@ import (
 
 	"shigoto/internal/auth"
 	"shigoto/internal/core"
+	"shigoto/internal/storage"
 )
 
 // SanitizeFilename strips characters that would break or hijack the
@@ -44,7 +46,7 @@ func SanitizeFilename(name string) string {
 type FileResponse struct {
 	ID           int64  `json:"id"`
 	MIME         string `json:"mime"`
-	SizeBytes    int    `json:"size_bytes"`
+	SizeBytes    int64  `json:"size_bytes"`
 	OriginalName string `json:"original_name"`
 }
 
@@ -53,38 +55,61 @@ func FileToResponse(f core.File) FileResponse {
 	return FileResponse{ID: f.ID, MIME: f.MIME, SizeBytes: f.SizeBytes, OriginalName: f.OriginalName}
 }
 
-// HandleUpload handles a multipart "file" upload. The request body is
-// capped at core.MaxFileBytes via http.MaxBytesReader; exceeding it gives
-// 413, checked both at ParseMultipartForm (a declared-too-large body) and
-// around SaveFile (a streamed body that only trips the limit while being
-// read), rather than folding either into the generic 422/500 paths.
-// SaveFile, the audit row and onSaved (when non-nil) run in one
-// transaction. On failure HandleUpload writes the error response itself
-// and returns false; on success it returns the file without writing a
-// response, so the caller chooses the status and body.
-func HandleUpload(w http.ResponseWriter, r *http.Request, d Deps, onSaved func(tx pgx.Tx, f core.File) error) (core.File, bool) {
-	r.Body = http.MaxBytesReader(w, r.Body, core.MaxFileBytes)
-	if err := r.ParseMultipartForm(core.MaxFileBytes); err != nil {
-		var tooLarge *http.MaxBytesError
-		if errors.As(err, &tooLarge) {
-			WriteError(w, http.StatusRequestEntityTooLarge, "file too large")
-			return core.File{}, false
-		}
+// HandleUpload streams a multipart "file" upload into d.Store under pol.
+// It refuses the upload with 507 when the store's free space is below
+// Cfg.UploadMinFreeBytes, reads the body part by part (other fields before
+// "file" are skipped) so nothing is spooled to memory or temp disk, and
+// gives 413 when the file exceeds pol.MaxBytes - whether detected by
+// SaveFile's own count or by the request-body cap. SaveFile, the audit row
+// and onSaved (when non-nil) run in one transaction. On failure
+// HandleUpload writes the error response itself and returns false; on
+// success it returns the file without writing a response, so the caller
+// chooses the status and body.
+func HandleUpload(w http.ResponseWriter, r *http.Request, d Deps, pol core.UploadPolicy, onSaved func(tx pgx.Tx, f core.File) error) (core.File, bool) {
+	if free, err := d.Store.FreeBytes(r.Context()); err != nil {
+		WriteCoreError(w, fmt.Errorf("checking free space: %w", err))
+		return core.File{}, false
+	} else if free >= 0 && free < d.Cfg.UploadMinFreeBytes {
+		WriteError(w, http.StatusInsufficientStorage, "insufficient storage")
+		return core.File{}, false
+	}
+	if pol.MaxBytes > 0 {
+		// Headroom for multipart framing and small fields; SaveFile
+		// enforces the exact file limit.
+		r.Body = http.MaxBytesReader(w, r.Body, pol.MaxBytes+1<<20)
+	}
+	mr, err := r.MultipartReader()
+	if err != nil {
 		WriteError(w, http.StatusBadRequest, "invalid multipart body")
 		return core.File{}, false
 	}
-	file, header, err := r.FormFile("file")
-	if err != nil {
-		WriteError(w, http.StatusUnprocessableEntity, "file is required")
-		return core.File{}, false
+	var part *multipart.Part
+	for {
+		part, err = mr.NextPart()
+		if errors.Is(err, io.EOF) {
+			WriteError(w, http.StatusUnprocessableEntity, "file is required")
+			return core.File{}, false
+		}
+		if err != nil {
+			if isTooLarge(err) {
+				WriteError(w, http.StatusRequestEntityTooLarge, "file too large")
+				return core.File{}, false
+			}
+			WriteError(w, http.StatusBadRequest, "invalid multipart body")
+			return core.File{}, false
+		}
+		if part.FormName() == "file" {
+			break
+		}
+		_ = part.Close()
 	}
-	defer file.Close()
+	defer part.Close()
 
 	p := auth.From(r.Context())
 	var created core.File
 	err = RunInTx(r.Context(), d.Pool, func(tx pgx.Tx) error {
 		var err error
-		created, err = core.SaveFile(r.Context(), tx, p.OrgID, d.Cfg.FilesDir, header.Filename, file)
+		created, err = core.SaveFile(r.Context(), tx, d.Store, p.OrgID, part.FileName(), part, pol)
 		if err != nil {
 			return err
 		}
@@ -99,8 +124,7 @@ func HandleUpload(w http.ResponseWriter, r *http.Request, d Deps, onSaved func(t
 		return nil
 	})
 	if err != nil {
-		var tooLarge *http.MaxBytesError
-		if errors.As(err, &tooLarge) {
+		if isTooLarge(err) {
 			WriteError(w, http.StatusRequestEntityTooLarge, "file too large")
 			return core.File{}, false
 		}
@@ -110,12 +134,17 @@ func HandleUpload(w http.ResponseWriter, r *http.Request, d Deps, onSaved func(t
 	return created, true
 }
 
+func isTooLarge(err error) bool {
+	var tooLarge *http.MaxBytesError
+	return errors.Is(err, core.ErrTooLarge) || errors.As(err, &tooLarge)
+}
+
 // ServeFile streams f's bytes with its stored (sniffed) MIME type.
 // X-Content-Type-Options: nosniff stops a browser from second-guessing
 // that type from the content; Content-Disposition forces a download using
-// the sanitized original name rather than the server path.
-func ServeFile(w http.ResponseWriter, f core.File, filesDir string) {
-	stored, err := os.Open(f.StoredPath(filesDir))
+// the sanitized original name rather than the stored key.
+func ServeFile(w http.ResponseWriter, f core.File, store storage.Store) {
+	stored, err := core.OpenFile(context.Background(), store, f)
 	if err != nil {
 		WriteCoreError(w, fmt.Errorf("opening stored file: %w", err))
 		return

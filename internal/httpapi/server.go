@@ -27,6 +27,7 @@ import (
 	"shigoto/internal/property"
 	"shigoto/internal/recon"
 	"shigoto/internal/reports"
+	"shigoto/internal/storage"
 	"shigoto/internal/timesheets"
 	"shigoto/internal/webui"
 )
@@ -57,6 +58,9 @@ type Deps struct {
 	// handle a nil Mailer by skipping the send, not erroring: the invite
 	// link is still returned to the caller so it can be shared by hand.
 	Mailer *mail.Mailer
+	// Store holds uploaded file bytes. It defaults to a disk store at
+	// Cfg.FilesDir.
+	Store storage.Store
 }
 
 // defaultPayments builds the default Payments resolver: a stripe.Provider
@@ -100,6 +104,9 @@ func (d Deps) withDefaults() Deps {
 	}
 	if d.Mailer == nil {
 		d.Mailer = mail.New(d.Cfg.SMTP)
+	}
+	if d.Store == nil {
+		d.Store = storage.NewDisk(d.Cfg.FilesDir)
 	}
 	return d
 }
@@ -156,7 +163,7 @@ func New(d Deps) http.Handler {
 			createPortalInvite(w, r, d)
 		})))
 
-	md := module.Deps{Pool: d.Pool, Auth: d.Auth, Cfg: d.Cfg, Billing: d.Billing}
+	md := module.Deps{Pool: d.Pool, Auth: d.Auth, Cfg: d.Cfg, Billing: d.Billing, Store: d.Store}
 	portal.RegisterRoutes(mux, md)
 	// Reports are core: always on, never gated by d.Cfg.Modules.
 	reports.RegisterRoutes(mux, md)

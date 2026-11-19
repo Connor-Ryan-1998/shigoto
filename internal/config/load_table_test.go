@@ -29,6 +29,8 @@ type loadWant struct {
 	TrustedProxy   *string  `yaml:"trusted_proxy"` // "" means no proxy is trusted
 	OIDCConfigured *bool    `yaml:"oidc_configured"`
 	OIDCScopes     []string `yaml:"oidc_scopes"`
+	UploadMax      *int64   `yaml:"upload_max_bytes"`
+	UploadMinFree  *int64   `yaml:"upload_min_free_bytes"`
 }
 
 func TestLoadTable(t *testing.T) {
@@ -113,6 +115,12 @@ func (w *loadWant) check(t *testing.T, label string, c Config) {
 	}
 	if w.OIDCConfigured != nil {
 		eq("OIDC configured", c.OIDC != nil, *w.OIDCConfigured)
+	}
+	if w.UploadMax != nil {
+		eq("UploadMaxBytes", c.UploadMaxBytes, *w.UploadMax)
+	}
+	if w.UploadMinFree != nil {
+		eq("UploadMinFreeBytes", c.UploadMinFreeBytes, *w.UploadMinFree)
 	}
 	if w.OIDCScopes != nil {
 		if c.OIDC == nil || !slices.Equal(c.OIDC.Scopes, w.OIDCScopes) {

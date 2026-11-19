@@ -49,6 +49,13 @@ type Config struct {
 	Modules     map[string]bool
 	FilesDir    string
 	BaseURL     string
+	// UploadMaxBytes caps a maintenance media upload
+	// (SHIGOTO_UPLOAD_MAX_BYTES, default 1 GiB; 0 = unlimited). Document
+	// uploads keep their own fixed 10 MiB cap.
+	UploadMaxBytes int64
+	// UploadMinFreeBytes refuses uploads (507) when the file store has less
+	// free space than this (SHIGOTO_UPLOAD_MIN_FREE_BYTES, default 5 GiB).
+	UploadMinFreeBytes int64
 	// Location is the timezone invoice dates (issue_date, due_date) are
 	// calculated in, so "today" means the operator's calendar day, not
 	// UTC's. Defaults to Australia/Brisbane.
@@ -80,6 +87,14 @@ func Load(getenv func(string) string) (Config, error) {
 	}
 	if c.FilesDir == "" {
 		c.FilesDir = "./data/files"
+	}
+
+	var err error
+	if c.UploadMaxBytes, err = nonNegativeBytes(getenv, "SHIGOTO_UPLOAD_MAX_BYTES", 1<<30); err != nil {
+		return Config{}, err
+	}
+	if c.UploadMinFreeBytes, err = nonNegativeBytes(getenv, "SHIGOTO_UPLOAD_MIN_FREE_BYTES", 5<<30); err != nil {
+		return Config{}, err
 	}
 
 	c.DatabaseURL = getenv("SHIGOTO_DATABASE_URL")
@@ -280,4 +295,18 @@ func StripeFor(getenv func(string) string, slug string) (StripeOrg, bool) {
 		return StripeOrg{}, false
 	}
 	return StripeOrg{SecretKey: secretKey, WebhookSecret: webhookSecret}, true
+}
+
+// nonNegativeBytes parses the byte count in env var name, or returns def
+// when it is unset.
+func nonNegativeBytes(getenv func(string) string, name string, def int64) (int64, error) {
+	v := strings.TrimSpace(getenv(name))
+	if v == "" {
+		return def, nil
+	}
+	n, err := strconv.ParseInt(v, 10, 64)
+	if err != nil || n < 0 {
+		return 0, fmt.Errorf("%s must be a non-negative byte count, got %q", name, v)
+	}
+	return n, nil
 }

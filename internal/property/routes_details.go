@@ -205,7 +205,7 @@ func uploadPropertyFileHandler(w http.ResponseWriter, r *http.Request, d module.
 		module.WriteCoreError(w, err)
 		return
 	}
-	created, ok := module.HandleUpload(w, r, d, nil)
+	created, ok := module.HandleUpload(w, r, d, core.DocumentPolicy, nil)
 	if !ok {
 		return
 	}
@@ -234,7 +234,7 @@ func downloadPropertyFileHandler(w http.ResponseWriter, r *http.Request, d modul
 		module.WriteCoreError(w, err)
 		return
 	}
-	module.ServeFile(w, f, d.Cfg.FilesDir)
+	module.ServeFile(w, f, d.Store)
 }
 
 // --- depreciation ---

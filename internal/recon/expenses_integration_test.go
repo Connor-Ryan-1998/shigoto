@@ -21,6 +21,7 @@ import (
 	"shigoto/internal/core"
 	"shigoto/internal/module"
 	"shigoto/internal/recon"
+	"shigoto/internal/storage"
 	"shigoto/internal/testkit"
 )
 
@@ -380,7 +381,7 @@ func TestFileDownloadOtherOrg404(t *testing.T) {
 	e.Member(owner, org, auth.Owner)
 	s := e.Login(owner, e.Handler())
 	other := e.Org("other")
-	otherFile, err := core.SaveFile(context.Background(), pool, other.ID, t.TempDir(), "receipt.png", bytes.NewReader(pngBytes))
+	otherFile, err := core.SaveFile(context.Background(), pool, storage.NewDisk(t.TempDir()), other.ID, "receipt.png", bytes.NewReader(pngBytes), core.DocumentPolicy)
 	if err != nil {
 		t.Fatalf("SaveFile: %v", err)
 	}
