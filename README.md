@@ -6,6 +6,15 @@ shipped as one Go binary plus Postgres. See `docs/design.md` for the design.
 See [Interface standards](docs/ui-standards.md) before extending the UI. It covers
 shared components, data interactions, layouts, accessibility, and portal boundaries.
 
+## Tenant portal
+
+Tenants invited from Members sign in by emailed link. With the property module on they get:
+
+- **Rent**: summary, running-balance history, printable payment receipts, and statements for a financial year or custom range as PDF or CSV. Everyone on the lease sees the whole lease account. Staff download the same statement from the lease page.
+- **Repairs**: report a repair from a phone with photos, video and voice notes; urgent repairs show the org's emergency phone (Settings → Repairs). Tenants follow progress on the ticket page, offer times that suit, confirm the booked visit, and grant or withdraw entry permission for that visit only. Rescheduling clears consent.
+
+Staff manage repairs on each property's Maintenance tab; open repairs also appear on the dashboard. No notifications are sent yet: the ticket timeline is the record.
+
 ## Requirements
 
 Docker plus [go-task](https://taskfile.dev), with Go on the host. Node 24 is

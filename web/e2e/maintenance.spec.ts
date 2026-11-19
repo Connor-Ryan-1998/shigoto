@@ -81,6 +81,9 @@ test('tenant reports a repair with media and follows staff progress', async ({ p
 		{ name: 'voice.webm', mimeType: 'audio/webm', buffer: webm }
 	]);
 	await expect(page.getByText('Uploaded')).toHaveCount(2);
+	await page.getByLabel('Day', { exact: true }).fill('2099-01-05');
+	await page.getByRole('button', { name: 'Add time' }).click();
+	await page.getByLabel("OK to enter if I'm out").check();
 	await page.getByLabel('Access notes (optional)').fill('Lockbox 4821');
 	await page.getByRole('button', { name: 'Submit repair' }).click();
 	await expect(page.getByRole('heading', { name: 'Kitchen tap leaking' })).toBeVisible();
@@ -111,7 +114,19 @@ test('tenant reports a repair with media and follows staff progress', async ({ p
 	await staff.getByLabel('Message', { exact: true }).fill('Plumber will call ahead.');
 	await staff.getByRole('button', { name: 'Send message' }).click();
 	await expect(staff.getByText('Plumber will call ahead.')).toBeVisible();
-	await staffContext.close();
+
+	// The tenant's preference is shown, but is not permission.
+	await expect(staff.getByText('Tenant preference: OK to enter if out')).toBeVisible();
+	await expect(staff.getByText('Mon 5 Jan · Morning (8am–12pm)')).toBeVisible();
+	await staff.getByRole('button', { name: 'Book visit' }).click();
+	const dialog = staff.getByRole('dialog', { name: 'Book visit' });
+	await dialog.getByLabel('Date', { exact: true }).fill('2099-01-05');
+	await dialog.getByLabel('Arrive from').fill('09:00');
+	await dialog.getByLabel('Arrive by').fill('11:00');
+	await dialog.getByRole('button', { name: 'Book visit' }).click();
+	await expect(staff.getByText('Mon 5 Jan, 9am – 11am')).toBeVisible();
+	await expect(staff.getByText('Entry: not yet confirmed')).toBeVisible();
+	const ticketPath = new URL(staff.url()).pathname;
 
 	// The tenant sees progress and the shared message, never the note.
 	await page.goto(ticketURL);
@@ -120,4 +135,36 @@ test('tenant reports a repair with media and follows staff progress', async ({ p
 	await expect(page.getByText('Plumber will call ahead.')).toBeVisible();
 	await expect(page.getByText(/SENTINEL/)).toHaveCount(0);
 	await expect(page.getByRole('button', { name: 'Cancel request' })).toHaveCount(0);
+
+	// Tenant confirms the visit, allowing entry.
+	await expect(page.getByText('Mon 5 Jan, 9am – 11am')).toBeVisible();
+	await expect(page.getByLabel("OK to enter if I'm out").last()).toBeChecked();
+	await page.getByRole('button', { name: 'Confirm time' }).click();
+	await expect(page.getByText("You've allowed entry if you're out")).toBeVisible();
+
+	await staff.goto(`${base}${ticketPath}`);
+	await expect(staff.getByText('Entry permitted')).toBeVisible();
+	await staff.goto(`${base}/maint/properties/${property.id}/maintenance`);
+	await expect(staff.getByText('Entry permitted')).toBeVisible();
+
+	// Rescheduling clears consent: the tenant must confirm again.
+	await staff.goto(`${base}${ticketPath}`);
+	await staff.getByRole('button', { name: 'Reschedule' }).click();
+	const re = staff.getByRole('dialog', { name: 'Reschedule visit' });
+	await re.getByLabel('Arrive from').fill('13:00');
+	await re.getByLabel('Arrive by').fill('15:00');
+	await re.getByRole('button', { name: 'Reschedule' }).click();
+	await expect(staff.getByText('Entry: not yet confirmed')).toBeVisible();
+
+	await page.reload();
+	await expect(page.getByText('Mon 5 Jan, 1pm – 3pm')).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Confirm time' })).toBeVisible();
+	await page.getByRole('button', { name: 'Request change' }).click();
+	await page.getByLabel('What would suit you better?').fill('Mornings only please');
+	await page.getByRole('button', { name: 'Send request' }).click();
+	await expect(page.getByText('Change requested — waiting for your property manager')).toBeVisible();
+
+	await staff.reload();
+	await expect(staff.getByText('“Mornings only please”')).toBeVisible();
+	await staffContext.close();
 });
