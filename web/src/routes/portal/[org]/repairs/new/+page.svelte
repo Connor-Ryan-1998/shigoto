@@ -8,7 +8,9 @@
 	import Button from '../../../../../lib/components/Button.svelte';
 	import LoadState from '../../../../../lib/components/LoadState.svelte';
 	import MediaPicker from '../../../../../lib/modules/property/MediaPicker.svelte';
-	import { CATEGORY_OPTIONS, URGENCY_LABEL, type Ticket, type Urgency } from '../../../../../lib/modules/property/maintenance';
+	import AvailabilityEditor from '../../../../../lib/modules/property/AvailabilityEditor.svelte';
+	import { todayLocal } from '../../../../../lib/format';
+	import { CATEGORY_OPTIONS, URGENCY_LABEL, type Ticket, type Urgency, type Window } from '../../../../../lib/modules/property/maintenance';
 
 	type List = { emergency_phone: string; leases: { id: number; property_address: string; active: boolean }[] };
 
@@ -23,12 +25,14 @@
 	let category = $state('plumbing');
 	let urgency = $state<Urgency>('routine');
 	let accessNotes = $state('');
+	let windows = $state<Window[]>([]);
+	let entryPreference = $state<'' | 'tenant_home' | 'permitted'>('');
 	let media = $state<{ busy: boolean; pendingIds: number[] }>({ busy: false, pendingIds: [] });
 	let saving = $state(false);
 	let error = $state('');
 
 	const activeLeases = $derived(info?.leases.filter((l) => l.active) ?? []);
-	const dirty = $derived(!!(title || description || accessNotes || media.pendingIds.length || media.busy));
+	const dirty = $derived(!!(title || description || accessNotes || windows.length || entryPreference || media.pendingIds.length || media.busy));
 	const { allowLeave } = useUnsavedChanges(() => dirty && !saving, () => saving);
 
 	async function load() {
@@ -48,10 +52,13 @@
 		saving = true; error = '';
 		try {
 			const t = await api<Ticket>('POST', `/api/v1/portal/${org}/maintenance`, {
-				lease_id: Number(leaseId), title, description, category, urgency, access_notes: accessNotes, pending_file_ids: media.pendingIds
+				lease_id: Number(leaseId), title, description, category, urgency, access_notes: accessNotes, pending_file_ids: media.pendingIds,
+				availability: windows, entry_preference: entryPreference || null
 			});
 			saving = false;
 			title = description = accessNotes = '';
+			windows = [];
+			entryPreference = '';
 			media = { busy: false, pendingIds: [] };
 			goto(`/portal/${org}/repairs/${t.id}`);
 		} catch (err) {
@@ -112,6 +119,16 @@
 					<fieldset class="fieldset">
 						<legend class="fieldset-legend">Photos, video or a voice note</legend>
 						<MediaPicker uploadUrl={`/api/v1/portal/${org}/maintenance/uploads`} deleteUrl={(id) => `/api/v1/portal/${org}/maintenance/uploads/${id}`} disabled={saving} onchange={(m) => (media = m)} />
+					</fieldset>
+					<fieldset class="fieldset">
+						<legend class="fieldset-legend">Times that suit you (optional)</legend>
+						<AvailabilityEditor {windows} today={todayLocal()} disabled={saving} onchange={(w) => (windows = w)} />
+					</fieldset>
+					<fieldset class="fieldset">
+						<legend class="fieldset-legend">Access</legend>
+						<label class="label"><input class="radio" type="radio" name="entry-pref" value="tenant_home" bind:group={entryPreference} /> I'll be home</label>
+						<label class="label"><input class="radio" type="radio" name="entry-pref" value="permitted" bind:group={entryPreference} /> OK to enter if I'm out</label>
+						<p class="text-sm text-base-content/70">You'll confirm access for the actual visit time once it's booked.</p>
 					</fieldset>
 					<Field label="Access notes (optional)" id="repair-access" hint="Keys, alarm, pets or parking.">
 						<textarea class="textarea w-full" id="repair-access" rows="2" maxlength="1000" bind:value={accessNotes}></textarea>

@@ -7,6 +7,10 @@ api:
     ticket: {id: 7, ref: R-0007, title: Tap, description: Leak, category: plumbing, urgency: routine, status: new, supplier: null, access_notes: "", property_address: 12 Banksia St, created_at: "2026-11-19T01:00:00Z"}
     files: []
     events: []
+    entry_preference: null
+    availability: []
+    open_visit: null
+    visits: []
 ready: Add a message
 fill: {Add a message: Thanks}
 submit: Send

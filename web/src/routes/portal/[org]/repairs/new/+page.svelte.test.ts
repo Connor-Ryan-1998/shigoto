@@ -68,4 +68,18 @@ describe('report a repair', () => {
 		expect(await screen.findByText('invalid input: lease is not active')).toBeTruthy();
 		expect((screen.getByLabelText("What's wrong?") as HTMLInputElement).value).toBe('Tap leaking');
 	});
+
+	it('sends times that suit and the entry preference', async () => {
+		mockApi({ 'GET /api/v1/portal/acme/maintenance': list(), 'POST /api/v1/portal/acme/maintenance': { id: 9 } });
+		render(Page);
+		await fillBasics();
+		await fireEvent.input(screen.getByLabelText('Day'), { target: { value: '2099-01-05' } });
+		await fireEvent.click(screen.getByRole('button', { name: 'Add time' }));
+		await fireEvent.click(screen.getByLabelText("OK to enter if I'm out"));
+		await fireEvent.submit(screen.getByRole('button', { name: 'Submit repair' }).closest('form')!);
+		await screen.findByRole('button', { name: 'Submit repair' });
+		expect(apiMock).toHaveBeenCalledWith('POST', '/api/v1/portal/acme/maintenance', expect.objectContaining({
+			entry_preference: 'permitted', availability: [{ date: '2099-01-05', slot: 'morning', start: null, end: null }]
+		}));
+	});
 });

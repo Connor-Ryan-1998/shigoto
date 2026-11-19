@@ -1,0 +1,14 @@
+id: portal-request-change
+component: RequestChangeDialog
+props: {open: true, apiBase: /api/v1/portal/acme/maintenance/7, visitId: 3, today: "2026-11-19"}
+callbacks: [onsaved]
+fill: {What would suit you better?: Any afternoon next week}
+submit: Send request
+request: POST /api/v1/portal/acme/maintenance/7/visits/3/request-change
+contract:
+  blocks_duplicate_submit: true
+  preserves_input_on: 422
+  cancel: Cancel
+  busy_dismiss_blocked: true
+  dirty_dismiss_confirms: true
+  dirty_navigation_blocked: true

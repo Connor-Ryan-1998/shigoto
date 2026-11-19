@@ -9,12 +9,16 @@
 	import StatusBadge from '../../../../../lib/components/StatusBadge.svelte';
 	import MediaGallery from '../../../../../lib/modules/property/MediaGallery.svelte';
 	import MediaPicker from '../../../../../lib/modules/property/MediaPicker.svelte';
+	import VisitCard from '../../../../../lib/modules/property/VisitCard.svelte';
+	import RequestChangeDialog from '../../../../../lib/modules/property/RequestChangeDialog.svelte';
+	import AvailabilityEditor from '../../../../../lib/modules/property/AvailabilityEditor.svelte';
+	import { todayLocal } from '../../../../../lib/format';
 	import {
 		CATEGORY_LABEL, STATUS_LABEL, STATUS_TONE, URGENCY_LABEL, eventLabel, isOpen,
-		type Ticket, type TicketEvent, type TicketFile
+		type Ticket, type TicketEvent, type TicketFile, type Visit, type Window
 	} from '../../../../../lib/modules/property/maintenance';
 
-	type Detail = { ticket: Ticket; files: TicketFile[]; events: TicketEvent[] };
+	type Detail = { ticket: Ticket; files: TicketFile[]; events: TicketEvent[]; entry_preference: string | null; availability: Window[]; open_visit: Visit | null };
 
 	const org = $derived(page.params.org ?? '');
 	const id = $derived(page.params.id ?? '');
@@ -29,7 +33,19 @@
 	let reason = $state('');
 	let cancelling = $state(false);
 	let cancelError = $state('');
+	let changeOpen = $state(false);
+	let availError = $state('');
 	let seq = 0;
+
+	async function saveAvailability(windows: Window[]) {
+		availError = '';
+		try {
+			await api('PUT', `${apiBase}/availability`, { windows });
+			await load();
+		} catch (e) {
+			availError = e instanceof ApiError ? e.message : 'Could not save your times.';
+		}
+	}
 
 	async function load() {
 		const token = ++seq;
@@ -83,6 +99,19 @@
 		<p class="mb-4 text-sm text-base-content/70">{t.ref} · {CATEGORY_LABEL[t.category] ?? t.category} · {URGENCY_LABEL[t.urgency]} · {t.property_address}</p>
 
 		<div class="grid max-w-3xl gap-4">
+			{#if detail.open_visit && isOpen(t)}
+				<VisitCard visit={detail.open_visit} preference={detail.entry_preference} {apiBase} onchanged={load} onrequestchange={() => (changeOpen = true)} />
+				<RequestChangeDialog bind:open={changeOpen} {apiBase} visitId={detail.open_visit.id} today={todayLocal()} onsaved={load} />
+			{/if}
+			{#if isOpen(t) && detail.open_visit?.status !== 'confirmed'}
+				<section class="card bg-base-100 shadow-sm" aria-labelledby="repair-times">
+					<div class="card-body">
+						<h2 id="repair-times" class="font-semibold">Times that suit you</h2>
+						{#if availError}<p class="text-sm text-error" role="alert">{availError}</p>{/if}
+						<AvailabilityEditor windows={detail.availability ?? []} today={todayLocal()} onchange={saveAvailability} />
+					</div>
+				</section>
+			{/if}
 			<section class="card bg-base-100 shadow-sm" aria-labelledby="repair-progress">
 				<div class="card-body">
 					<h2 id="repair-progress" class="font-semibold">Progress</h2>
