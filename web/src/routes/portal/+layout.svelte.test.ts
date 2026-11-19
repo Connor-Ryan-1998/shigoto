@@ -66,4 +66,16 @@ describe('portal layout', () => {
 		render(Layout, { children: childSnippet() });
 		expect(screen.getByRole('link', { name: 'Invoices' }).classList.contains('font-semibold')).toBe(true);
 	});
+
+	it('shows tenants a Rent tab and hides it from clients', () => {
+		session.setMe(meWithOrgs([{ slug: 'acme', name: 'Acme', role: 'tenant', portal: true }]));
+		const { unmount } = render(Layout, { children: childSnippet() });
+		expect(screen.getByRole('link', { name: 'Rent' }).getAttribute('href')).toBe('/portal/acme/rent');
+		expect(screen.queryByRole('link', { name: 'Leases' })).toBeNull();
+		unmount();
+
+		session.setMe(meWithOrgs([{ slug: 'acme', name: 'Acme', role: 'client', portal: true }]));
+		render(Layout, { children: childSnippet() });
+		expect(screen.queryByRole('link', { name: 'Rent' })).toBeNull();
+	});
 });

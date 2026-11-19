@@ -8,7 +8,7 @@
 
 	// The portal's own minimal shell - no staff nav, no org switcher, no
 	// module registry: it only ever shows a tenant/client their own org's
-	// invoices and (tenants only) leases. Kept entirely separate from
+	// invoices and (tenants only) rent. Kept entirely separate from
 	// [org]/+layout.svelte so no staff navigation or data can ever render
 	// here (global-constraints.md "Portal isolation").
 	let { children } = $props();
@@ -45,15 +45,16 @@
 </script>
 
 <a href="#main-content" class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-box focus:bg-base-100 focus:p-2">Skip to content</a>
-<div class="flex min-h-screen flex-col bg-base-200">
-	<header class="navbar flex-wrap gap-2 px-4 md:px-6">
+<div class="flex min-h-screen flex-col bg-base-200 print:block print:bg-white">
+	<header class="navbar flex-wrap gap-2 px-4 md:px-6 print:hidden">
 		<span class="hidden pr-2 text-lg font-semibold tracking-tight min-[375px]:inline">{currentOrg?.name ?? 'Portal'}</span>
 		{#if org}
 			<nav aria-label="Portal" class="flex gap-1">
-				<a class={['btn btn-ghost btn-sm', page.url.pathname.startsWith(`/portal/${org}/invoices`) && 'bg-primary/12 font-semibold text-primary']} href={`/portal/${org}/invoices`} aria-current={page.url.pathname.startsWith(`/portal/${org}/invoices`) ? 'page' : undefined}>Invoices</a>
 				{#if currentOrg?.role === 'tenant'}
-					<a class={['btn btn-ghost btn-sm', page.url.pathname.startsWith(`/portal/${org}/leases`) && 'bg-primary/12 font-semibold text-primary']} href={`/portal/${org}/leases`} aria-current={page.url.pathname.startsWith(`/portal/${org}/leases`) ? 'page' : undefined}>Leases</a>
+					<a class={['btn btn-ghost btn-sm', page.url.pathname.startsWith(`/portal/${org}/rent`) && 'bg-primary/12 font-semibold text-primary']} href={`/portal/${org}/rent`} aria-current={page.url.pathname.startsWith(`/portal/${org}/rent`) ? 'page' : undefined}>Rent</a>
 				{/if}
+				<a class={['btn btn-ghost btn-sm', page.url.pathname.startsWith(`/portal/${org}/invoices`) && 'bg-primary/12 font-semibold text-primary']} href={`/portal/${org}/invoices`} aria-current={page.url.pathname.startsWith(`/portal/${org}/invoices`) ? 'page' : undefined}>Invoices</a>
+
 			</nav>
 		{/if}
 		<div class="ml-auto flex flex-wrap items-center gap-2">

@@ -110,4 +110,17 @@ describe('billed-period lease warnings', () => {
 		await screen.findByRole('heading', { name: 'Ledger' });
 		expect(screen.queryByRole('button', { name: 'Change rent' })).toBeNull();
 	});
+	it('offers statement downloads for the chosen financial year', async () => {
+		render(Page);
+		await screen.findByRole('heading', { name: 'Ledger' });
+		const select = screen.getByLabelText('Statement year') as HTMLSelectElement;
+		const fy = Number(select.value);
+		expect(screen.getByRole('link', { name: 'Statement PDF' }).getAttribute('href')).toBe(
+			`/api/v1/orgs/acme/leases/4/statement.pdf?from=${fy - 1}-07-01&to=${fy}-06-30`
+		);
+		await fireEvent.change(select, { target: { value: String(fy - 1) } });
+		expect(screen.getByRole('link', { name: 'Statement CSV' }).getAttribute('href')).toBe(
+			`/api/v1/orgs/acme/leases/4/statement.csv?from=${fy - 2}-07-01&to=${fy - 1}-06-30`
+		);
+	});
 });

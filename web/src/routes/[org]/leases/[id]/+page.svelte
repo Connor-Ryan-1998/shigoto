@@ -9,6 +9,9 @@
 	import Toast from '../../../../lib/components/Toast.svelte';
 	import Dialog from '../../../../lib/components/Dialog.svelte';
 	import LoadState from '../../../../lib/components/LoadState.svelte';
+	import Select from '../../../../lib/components/Select.svelte';
+	import { currentFY, fyOptions } from '../../../../lib/modules/property/fy';
+	import { fyRange } from '../../../../lib/modules/property/portalRent';
 
 	type Lease = {
 		id: number;
@@ -53,6 +56,12 @@
 
 	let lease = $state<Lease | null>(null);
 	let ledger = $state<Ledger | null>(null);
+	const statementYears = fyOptions(currentFY(todayLocal()), 5);
+	let statementYear = $state(statementYears[0].value);
+	function statementHref(format: 'pdf' | 'csv'): string {
+		const r = fyRange(Number(statementYear));
+		return `/api/v1/orgs/${org}/leases/${page.params.id}/statement.${format}?from=${r.from}&to=${r.to}`;
+	}
 	let error = $state('');
 	let notice = $state('');
 	let affectedInvoices = $state<AffectedInvoice[]>([]);
@@ -212,6 +221,15 @@
 
 {#if canRead && loadedURL === url && ledger}
 	<h2 class="mt-6 mb-3 text-lg font-semibold">Ledger</h2>
+	<div class="mb-3 flex flex-wrap items-end gap-2">
+		<Field label="Statement year" id="lease-statement-year">
+			{#snippet children()}
+				<Select id="lease-statement-year" bind:value={statementYear} options={statementYears} />
+			{/snippet}
+		</Field>
+		<a class="btn btn-outline" href={statementHref('pdf')} download>Statement PDF</a>
+		<a class="btn btn-outline" href={statementHref('csv')} download>Statement CSV</a>
+	</div>
 	<p class="mb-3 text-base-content/70">
 		Arrears {money(ledger.arrears)} · Invoiced, not due {money(ledger.invoiced_not_due)} · Unissued {money(
 			ledger.unissued

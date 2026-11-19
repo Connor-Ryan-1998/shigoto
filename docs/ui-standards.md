@@ -21,7 +21,7 @@ dashboards, reports, and the customer portal.
 | Complete a contextual operation | Drawer, dedicated workflow, or bounded dialog with a server-checked preview, preserving context | Bank-line reconciliation, billing run (dialog on Invoices) |
 | Review totals | Sections/cards, labeled filters, semantic financial tables/charts | Dashboard, reports |
 | Authenticate | Compact form using shared fields, buttons, and feedback | Login, invitations |
-| View customer data | The same presentation rules in the separate portal shell | Portal invoices and leases |
+| View customer data | The same presentation rules in the separate portal shell | Portal invoices and rent |
 
 Do not embed a permanently open create/edit form beneath a record list.
 Do not turn reports, dashboards, or read-only lease summaries into CRUD tables.
@@ -128,7 +128,7 @@ UI controls also reflect module availability and current permissions.
 Keep the portal's layout tree, endpoints, and domain types separate from staff
 interfaces. Share presentation components, not staff navigation, organization
 switching, private invoice fields, mutation controls, or password/SSO re-login.
-Tenant-only lease navigation remains tenant-only. Customer records remain
+Tenant-only rent navigation remains tenant-only. Customer records remain
 contact-scoped server-side.
 
 Preserve warnings and invoice links after lease or expense changes. Closing an
@@ -197,7 +197,7 @@ screens that need no route-specific rewrite.
 | --- | --- | --- |
 | `+layout.svelte` | Announced session loading; retained retry and re-login | `+layout.test.ts`, `e2e/financial-workflows.spec.ts` |
 | `[org]/+layout.svelte` | Active navigation, retained skip link, org-keyed content and mobile drawer | `+layout.svelte.test.ts`, `e2e/smoke.spec.ts` |
-| `portal/+layout.svelte` | Separate shell, active navigation, skip link, shared spacing | `+layout.svelte.test.ts`, `e2e/portal.spec.ts` |
+| `portal/+layout.svelte` | Separate shell, active navigation (tenants: Rent, Invoices), skip link, shared spacing, chrome hidden in print | `+layout.svelte.test.ts`, `e2e/portal.spec.ts` |
 | `+page.svelte` | Redirect-only; no artificial form or heading required | `e2e/smoke.spec.ts` |
 | `[org]/[...rest]/+page.svelte` | Existing PageHeader not-found layout retained | route review; shared PageHeader tests |
 | `[org]/+page.svelte` | Existing shared heading/cards/state layout retained | `+page.test.ts`, `e2e/smoke.spec.ts` |
@@ -217,7 +217,7 @@ screens that need no route-specific rewrite.
 | `[org]/properties/[id]/depreciation/+page.svelte` | FY filter in URL; FY totals; protected item dialog | `+page.svelte.test.ts`, `lib/test/editors/depreciation-item-dialog.yaml` |
 | `[org]/properties/[id]/notes/+page.svelte` | Guarded single-textarea page editor | `+page.svelte.test.ts`, `lib/test/editors/property-notes.yaml`, `e2e/financial-workflows.spec.ts` |
 | `[org]/leases/new/+page.svelte` | New dedicated guarded lease editor | `+page.svelte.test.ts`, `lib/test/editors/lease-new.yaml`, `e2e/financial-workflows.spec.ts` |
-| `[org]/leases/[id]/+page.svelte` | Short action dialogs; warning panel remains on detail page | `+page.svelte.test.ts`, `+page.test.ts`, `lib/test/editors/lease-rent-change.yaml`, `e2e/financial-workflows.spec.ts` |
+| `[org]/leases/[id]/+page.svelte` | Short action dialogs; warning panel remains on detail page; FY statement PDF/CSV links | `+page.svelte.test.ts`, `+page.test.ts`, `lib/test/editors/lease-rent-change.yaml`, `e2e/financial-workflows.spec.ts` |
 | `[org]/expenses/+page.svelte` | List/filter/state layout; New expense navigation | `+page.svelte.test.ts`, `e2e/financial-workflows.spec.ts` |
 | `[org]/expenses/new/+page.svelte` | New dedicated guarded expense editor, existing shared split form | parent `expenses/+page.svelte.test.ts`, `lib/test/editors/expense-new.yaml` |
 | `[org]/expenses/[id]/+page.svelte` | Shared back/header/table; stored IDs remain fallback for missing names | `+page.svelte.test.ts` |
@@ -230,7 +230,9 @@ screens that need no route-specific rewrite.
 | `portal/+page.svelte` | Shared header; picker/single-org redirect retained | `e2e/portal.spec.ts` |
 | `portal/[org]/invoices/+page.svelte` | Shared table/format/state layout; numeric alignment | `e2e/portal.spec.ts` |
 | `portal/[org]/invoices/[id]/+page.svelte` | Shared back/header/table; restricted customer invoice view retained | `+page.svelte.test.ts`, `e2e/portal.spec.ts` |
-| `portal/[org]/leases/+page.svelte` | Read-only lease cards retained; scoped response cleanup | route review; `e2e/portal.spec.ts` validates isolation/auth |
+| `portal/[org]/leases/+page.svelte` | Redirect-only to the Rent tab (old links keep working) | route review |
+| `portal/[org]/rent/+page.svelte` | Tenant-only; lease selector only with several leases; summary, FY/custom statement downloads, newest-first history with "Show earlier"; latest-response guard | `+page.svelte.test.ts`, `internal/httpapi/testdata/cases/portal_rent.yaml`, `e2e/portal.spec.ts` |
+| `portal/[org]/rent/[leaseId]/receipts/[paymentId]/+page.svelte` | Printable receipt (portal chrome hidden in print) | `+page.svelte.test.ts`, `portal_rent.yaml` |
 | `login/+page.svelte` | Shared fields/actions/feedback; pending-request input locks | `+page.test.ts`, all browser suites |
 | `auth/magic/+page.svelte` | Compact status/error layout; one-use token handling retained | `+page.test.ts`, `e2e/portal.spec.ts` |
 | `invite/[token]/+page.svelte` | Compact shared-field form; existing invalid/expired states retained | `+page.test.ts`, `e2e/invite.spec.ts` |
