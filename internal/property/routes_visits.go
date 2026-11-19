@@ -122,11 +122,23 @@ type visitTimes struct {
 	Reason            string `json:"reason"`
 }
 
-func (b visitTimes) parse() (time.Time, time.Time, error) {
-	s, err1 := time.Parse(time.RFC3339, b.StartsAt)
-	e, err2 := time.Parse(time.RFC3339, b.EndsAt)
+// parseVisitTime accepts RFC 3339, or a wall-clock "YYYY-MM-DDTHH:MM" (as
+// a datetime-local input sends) read in the org's timezone loc.
+func parseVisitTime(v string, loc *time.Location) (time.Time, error) {
+	if t, err := time.Parse(time.RFC3339, v); err == nil {
+		return t, nil
+	}
+	if loc == nil {
+		loc = time.UTC
+	}
+	return time.ParseInLocation("2006-01-02T15:04", v, loc)
+}
+
+func (b visitTimes) parse(loc *time.Location) (time.Time, time.Time, error) {
+	s, err1 := parseVisitTime(b.StartsAt, loc)
+	e, err2 := parseVisitTime(b.EndsAt, loc)
 	if err1 != nil || err2 != nil {
-		return time.Time{}, time.Time{}, invalid("starts_at and ends_at must be RFC 3339 times")
+		return time.Time{}, time.Time{}, invalid("starts_at and ends_at must be YYYY-MM-DDTHH:MM or RFC 3339 times")
 	}
 	return s, e, nil
 }
@@ -165,14 +177,14 @@ func registerVisitRoutes(mux *http.ServeMux, d module.Deps) {
 		}))
 	}
 	mux.Handle("POST /api/v1/orgs/{org}/maintenance/{ticketId}/visits", visitAction(http.StatusCreated, func(r *http.Request, tx pgx.Tx, p auth.Principal, ticketID, id int64, b visitTimes) (Visit, error) {
-		s, e, err := b.parse()
+		s, e, err := b.parse(d.Cfg.Location)
 		if err != nil {
 			return Visit{}, err
 		}
 		return BookVisit(r.Context(), tx, p.OrgID, ticketID, p.UserID, b.SupplierContactID, s, e)
 	}))
 	mux.Handle("PUT /api/v1/orgs/{org}/maintenance/{ticketId}/visits/{visitId}", visitAction(http.StatusOK, func(r *http.Request, tx pgx.Tx, p auth.Principal, ticketID, id int64, b visitTimes) (Visit, error) {
-		s, e, err := b.parse()
+		s, e, err := b.parse(d.Cfg.Location)
 		if err != nil {
 			return Visit{}, err
 		}

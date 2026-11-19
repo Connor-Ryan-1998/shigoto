@@ -146,3 +146,9 @@ cases:
     request: {method: POST, path: "/api/v1/orgs/acme/maintenance/{ticket_a}/visits/{ticket_visit_visit}/done"}
     expect: {status: 404}
     unchanged: [maintenance_visits]
+
+  - name: staff books with local wall-clock times in the org timezone
+    as: owner
+    isolate: true
+    request: {method: POST, path: "/api/v1/orgs/acme/maintenance/{ticket_sched}/visits", body: {starts_at: "2030-02-01T09:00", ends_at: "2030-02-01T11:00"}}
+    expect: {status: 201, body: {starts_at: "2030-02-01T09:00:00Z", ends_at: "2030-02-01T11:00:00Z"}}
