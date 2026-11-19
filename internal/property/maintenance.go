@@ -79,6 +79,10 @@ type NewTicket struct {
 	Urgency        string
 	AccessNotes    string
 	PendingFileIDs []int64
+	// EntryPreference ("tenant_home" or "permitted") is only a stated
+	// preference; Availability are times that suit the tenant.
+	EntryPreference *string
+	Availability    []AvailabilityWindow
 }
 
 // TicketFilter selects tickets for ListTickets. A non-nil LeaseIDs limits
@@ -190,6 +194,11 @@ func CreateTicket(ctx context.Context, tx core.Querier, orgID int64, in NewTicke
 		return Ticket{}, invalid("too many files")
 	case in.ContactID != nil && in.LeaseID == nil:
 		return Ticket{}, invalid("lease is required")
+	case in.EntryPreference != nil && *in.EntryPreference != "tenant_home" && *in.EntryPreference != "permitted":
+		return Ticket{}, invalid("entry preference must be tenant_home or permitted")
+	}
+	if err := validateWindows(in.Availability, today); err != nil {
+		return Ticket{}, err
 	}
 	if err := requireProperty(ctx, tx, orgID, in.PropertyID); err != nil {
 		return Ticket{}, err
@@ -264,6 +273,14 @@ func CreateTicket(ctx context.Context, tx core.Querier, orgID int64, in NewTicke
 		}
 	}
 
+	if in.EntryPreference != nil {
+		if err := SetEntryPreference(ctx, tx, orgID, id, in.EntryPreference); err != nil {
+			return Ticket{}, err
+		}
+	}
+	if err := replaceAvailability(ctx, tx, orgID, id, in.Availability); err != nil {
+		return Ticket{}, err
+	}
 	if _, err := addEvent(ctx, tx, orgID, id, "created", &in.UserID, "", nil, true); err != nil {
 		return Ticket{}, err
 	}
