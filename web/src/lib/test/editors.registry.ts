@@ -19,12 +19,14 @@ import AssignSupplierDialog from '../modules/property/AssignSupplierDialog.svelt
 import TicketMessageDialog from '../modules/property/TicketMessageDialog.svelte';
 import PortalRepairNewPage from '../../routes/portal/[org]/repairs/new/+page.svelte';
 import PortalRepairPage from '../../routes/portal/[org]/repairs/[id]/+page.svelte';
+import VisitDialog from '../modules/property/VisitDialog.svelte';
 import PropertyNotesPage from '../../routes/[org]/properties/[id]/notes/+page.svelte';
 
 export const components = {
 	AssignSupplierDialog,
 	NewTicketDialog,
 	TicketMessageDialog,
+	VisitDialog,
 	BillingRunDialog,
 	ContactDialog,
 	DepreciationItemDialog,

@@ -7,10 +7,12 @@
 	import StatusBadge from '../../../../../../lib/components/StatusBadge.svelte';
 	import MediaGallery from '../../../../../../lib/modules/property/MediaGallery.svelte';
 	import AssignSupplierDialog from '../../../../../../lib/modules/property/AssignSupplierDialog.svelte';
+	import VisitDialog from '../../../../../../lib/modules/property/VisitDialog.svelte';
+	import EntryPanel from '../../../../../../lib/modules/property/EntryPanel.svelte';
 	import TicketMessageDialog, { type MessageAction } from '../../../../../../lib/modules/property/TicketMessageDialog.svelte';
 	import {
-		CATEGORY_LABEL, STATUS_LABEL, STATUS_TONE, URGENCY_LABEL, URGENCY_TONE, eventLabel, isOpen,
-		type Ticket, type TicketEvent, type TicketFile
+		CATEGORY_LABEL, STATUS_LABEL, STATUS_TONE, URGENCY_LABEL, URGENCY_TONE, eventLabel, isOpen, visitWindow, windowLabel,
+		type Ticket, type TicketEvent, type TicketFile, type Visit, type Window
 	} from '../../../../../../lib/modules/property/maintenance';
 
 	type Detail = {
@@ -18,6 +20,10 @@
 		tenants: { id: number; name: string; email: string; phone: string }[];
 		files: TicketFile[];
 		events: TicketEvent[];
+		entry_preference: string | null;
+		availability: Window[];
+		open_visit: Visit | null;
+		visits: Visit[];
 	};
 
 	const org = $derived(page.params.org ?? '');
@@ -33,6 +39,19 @@
 	let assigning = $state(false);
 	let messageOpen = $state(false);
 	let action = $state<MessageAction>('note');
+	let visitOpen = $state(false);
+	let rescheduling = $state(false);
+	let visitError = $state('');
+
+	async function visitDone(v: Visit) {
+		visitError = '';
+		try {
+			await api('POST', `${apiBase}/visits/${v.id}/done`);
+			await load();
+		} catch (e) {
+			visitError = e instanceof ApiError ? e.message : 'Could not update the visit.';
+		}
+	}
 	let seq = 0;
 
 	async function load() {
@@ -116,6 +135,37 @@
 				</section>
 			</div>
 			<aside class="flex flex-col gap-4">
+				<section class="card bg-base-100 shadow-sm" aria-labelledby="ticket-visit">
+					<div class="card-body gap-2">
+						<h3 id="ticket-visit" class="font-semibold">Visit</h3>
+						{#if detail.open_visit}
+							{@const v = detail.open_visit}
+							<p class="font-semibold">{visitWindow(v.starts_at, v.ends_at)}</p>
+							<p class="text-sm">{v.supplier.name} · {v.status === 'confirmed' ? 'Confirmed by tenant' : v.status === 'change_requested' ? 'Tenant asked for a different time' : 'Waiting for tenant to confirm'}</p>
+							{#if v.change_note}<p class="rounded-box bg-warning/10 p-2 text-sm">“{v.change_note}”</p>{/if}
+						{:else}
+							<p class="text-base-content/70">No visit booked.</p>
+						{/if}
+						<EntryPanel visit={detail.open_visit} preference={detail.entry_preference} accessNotes={t.access_notes} />
+						{#if detail.availability.length}
+							<h4 class="mt-1 text-sm font-semibold">Times that suit the tenant</h4>
+							<ul class="text-sm">{#each detail.availability as w, i (i)}<li>{windowLabel(w)}</li>{/each}</ul>
+						{/if}
+						{#if visitError}<p class="text-sm text-error" role="alert">{visitError}</p>{/if}
+						{#if canWrite && isOpen(t)}
+							<div class="flex flex-wrap gap-2">
+								{#if detail.open_visit}
+									{@const v = detail.open_visit}
+									<Button size="sm" variant="secondary" onclick={() => { rescheduling = true; visitOpen = true; }}>Reschedule</Button>
+									<Button size="sm" variant="secondary" onclick={() => visitDone(v)}>Mark visit done</Button>
+									<Button size="sm" variant="danger" onclick={() => openMessage('cancel_visit')}>Cancel visit</Button>
+								{:else if t.supplier}
+									<Button size="sm" onclick={() => { rescheduling = false; visitOpen = true; }}>Book visit</Button>
+								{/if}
+							</div>
+						{/if}
+					</div>
+				</section>
 				<section class="card bg-base-100 shadow-sm" aria-labelledby="ticket-people">
 					<div class="card-body gap-2">
 						<h3 id="ticket-people" class="font-semibold">Tenants</h3>
@@ -126,8 +176,6 @@
 						{/each}
 						<h3 class="mt-2 font-semibold">Tradesperson</h3>
 						<p>{t.supplier?.name ?? 'Not assigned'}</p>
-						<h3 class="mt-2 font-semibold">Access notes</h3>
-						<p class="whitespace-pre-line">{t.access_notes || 'None'}</p>
 					</div>
 				</section>
 			</aside>
@@ -135,7 +183,8 @@
 
 		{#if canWrite}
 			<AssignSupplierDialog bind:open={assigning} {org} ticket={t} onsaved={load} />
-			<TicketMessageDialog bind:open={messageOpen} {org} ticketId={t.id} {action} onsaved={load} />
+			<TicketMessageDialog bind:open={messageOpen} {org} ticketId={t.id} visitId={detail.open_visit?.id} {action} onsaved={load} />
+			<VisitDialog bind:open={visitOpen} {org} ticket={t} visit={rescheduling ? detail.open_visit : null} onsaved={load} />
 		{/if}
 	{/if}
 </LoadState>

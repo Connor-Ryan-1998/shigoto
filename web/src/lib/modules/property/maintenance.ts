@@ -99,3 +99,74 @@ export function mediaKind(mime: string, name = ''): 'image' | 'video' | 'audio' 
 	if (mime.startsWith('audio/')) return 'audio';
 	return 'other';
 }
+
+export type EntryState = 'permitted' | 'tenant_home' | 'withdrawn' | 'unconfirmed';
+
+export type Visit = {
+	id: number;
+	supplier: { id: number; name: string };
+	starts_at: string;
+	ends_at: string;
+	status: 'booked' | 'confirmed' | 'change_requested' | 'cancelled' | 'done';
+	tenant_confirmed_at: string | null;
+	change_note: string;
+	entry_state: EntryState;
+	entry_granted_at: string | null;
+	entry_withdrawn_at: string | null;
+};
+
+export type Window = { date: string; slot: 'morning' | 'afternoon' | 'custom'; start: string | null; end: string | null };
+
+export const ENTRY_LABEL: Record<EntryState, string> = {
+	permitted: 'Entry permitted',
+	tenant_home: 'Tenant will be home',
+	withdrawn: 'Entry withdrawn',
+	unconfirmed: 'Entry: not yet confirmed'
+};
+
+export const ENTRY_TONE: Record<EntryState, 'success' | 'info' | 'danger' | 'warning'> = {
+	permitted: 'success',
+	tenant_home: 'info',
+	withdrawn: 'danger',
+	unconfirmed: 'warning'
+};
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+// wall reads the date and time written in an RFC 3339 string - the org's
+// local time the server sends - ignoring the viewer's own timezone.
+function wall(iso: string) {
+	const [, y, mo, d, h, mi] = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(iso) ?? [];
+	return { y: +y, mo: +mo, d: +d, h: +h, mi: +mi };
+}
+
+function clock(h: number, mi: number): string {
+	const suffix = h < 12 ? 'am' : 'pm';
+	const h12 = h % 12 === 0 ? 12 : h % 12;
+	return mi === 0 ? `${h12}${suffix}` : `${h12}:${String(mi).padStart(2, '0')}${suffix}`;
+}
+
+// visitWindow formats a visit as "Tue 24 Nov, 9am – 11am" in org time.
+export function visitWindow(startISO: string, endISO: string): string {
+	const s = wall(startISO);
+	const e = wall(endISO);
+	const day = DAYS[new Date(Date.UTC(s.y, s.mo - 1, s.d)).getUTCDay()];
+	const sameDay = s.y === e.y && s.mo === e.mo && s.d === e.d;
+	return `${day} ${s.d} ${MONTHS[s.mo - 1]}, ${clock(s.h, s.mi)} – ${sameDay ? '' : `${e.d} ${MONTHS[e.mo - 1]}, `}${clock(e.h, e.mi)}`;
+}
+
+// localInput turns an RFC 3339 org-time string into date and HH:MM parts.
+export function localParts(iso: string): { date: string; time: string } {
+	return { date: iso.slice(0, 10), time: iso.slice(11, 16) };
+}
+
+export function windowLabel(w: Window): string {
+	const [y, m, d] = w.date.split('-').map(Number);
+	const day = `${DAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]} ${d} ${MONTHS[m - 1]}`;
+	if (w.slot === 'morning') return `${day} · Morning (8am–12pm)`;
+	if (w.slot === 'afternoon') return `${day} · Afternoon (12–5pm)`;
+	const [sh, sm] = (w.start ?? '00:00').split(':').map(Number);
+	const [eh, em] = (w.end ?? '00:00').split(':').map(Number);
+	return `${day} · ${clock(sh, sm)} – ${clock(eh, em)}`;
+}

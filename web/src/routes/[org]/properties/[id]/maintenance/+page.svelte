@@ -8,7 +8,7 @@
 	import StatusBadge from '../../../../../lib/components/StatusBadge.svelte';
 	import DateText from '../../../../../lib/components/DateText.svelte';
 	import NewTicketDialog from '../../../../../lib/modules/property/NewTicketDialog.svelte';
-	import { STATUS_LABEL, STATUS_TONE, URGENCY_LABEL, URGENCY_TONE, type Ticket } from '../../../../../lib/modules/property/maintenance';
+	import { ENTRY_LABEL, ENTRY_TONE, STATUS_LABEL, STATUS_TONE, URGENCY_LABEL, URGENCY_TONE, visitWindow, type Ticket, type Visit } from '../../../../../lib/modules/property/maintenance';
 
 	const org = $derived(page.params.org ?? '');
 	const id = $derived(page.params.id ?? '');
@@ -17,7 +17,7 @@
 	const canWrite = $derived(member?.perms.includes('property_write') ?? false);
 	const base = $derived(`/${org}/properties/${id}/maintenance`);
 
-	let tickets = $state<Ticket[]>([]);
+	let tickets = $state<(Ticket & { open_visit?: Visit | null })[]>([]);
 	let loading = $state(true);
 	let error = $state('');
 	let creating = $state(false);
@@ -52,7 +52,7 @@
 <LoadState {loading} {error} loadingLabel="Loading repairs…" onretry={load} empty={tickets.length === 0} emptyTitle={showAll ? 'No repairs yet' : 'No open repairs'}>
 	<div class="overflow-x-auto">
 		<table class="table">
-			<thead><tr><th>Ref</th><th>Issue</th><th>Urgency</th><th>Status</th><th>Raised</th></tr></thead>
+			<thead><tr><th>Ref</th><th>Issue</th><th>Urgency</th><th>Status</th><th>Visit</th><th>Raised</th></tr></thead>
 			<tbody>
 				{#each tickets as t (t.id)}
 					<tr>
@@ -60,6 +60,12 @@
 						<td><a class="link link-primary" href={`${base}/${t.id}`}>{t.title}</a>{#if t.supplier}<div class="text-sm text-base-content/70">{t.supplier.name}</div>{/if}</td>
 						<td><StatusBadge status={URGENCY_LABEL[t.urgency]} tone={URGENCY_TONE[t.urgency]} /></td>
 						<td><StatusBadge status={STATUS_LABEL[t.status]} tone={STATUS_TONE[t.status]} /></td>
+						<td class="whitespace-nowrap">
+							{#if t.open_visit}
+								<div>{visitWindow(t.open_visit.starts_at, t.open_visit.ends_at)}</div>
+								<StatusBadge status={ENTRY_LABEL[t.open_visit.entry_state]} tone={ENTRY_TONE[t.open_visit.entry_state]} />
+							{:else}<span class="text-base-content/70">—</span>{/if}
+						</td>
 						<td class="whitespace-nowrap"><DateText iso={t.created_at.slice(0, 10)} /></td>
 					</tr>
 				{/each}

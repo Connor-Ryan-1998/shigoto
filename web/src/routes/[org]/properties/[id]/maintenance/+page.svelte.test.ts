@@ -63,4 +63,12 @@ describe('property maintenance tab', () => {
 		await screen.findByText('No open repairs');
 		expect(screen.queryByRole('button', { name: 'New repair' })).toBeNull();
 	});
+
+	it('shows the open visit and entry state in the list', async () => {
+		const open_visit = { id: 3, supplier: { id: 4, name: 'Fitzroy Plumbing' }, starts_at: '2026-11-24T09:00:00+10:00', ends_at: '2026-11-24T11:00:00+10:00', status: 'confirmed', tenant_confirmed_at: null, change_note: '', entry_state: 'permitted', entry_granted_at: null, entry_withdrawn_at: null };
+		mockApi({ 'GET /api/v1/orgs/acme/properties/1/maintenance?status=open': [ticket({ status: 'scheduled', open_visit })] });
+		render(Page);
+		expect(await screen.findByText('Tue 24 Nov, 9am – 11am')).toBeTruthy();
+		expect(screen.getByText('Entry permitted')).toBeTruthy();
+	});
 });

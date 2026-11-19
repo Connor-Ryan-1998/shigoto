@@ -6,16 +6,17 @@
 	import Field from '../../components/Field.svelte';
 	import Button from '../../components/Button.svelte';
 
-	export type MessageAction = 'note' | 'comment' | 'complete' | 'cancel';
+	export type MessageAction = 'note' | 'comment' | 'complete' | 'cancel' | 'cancel_visit';
 
 	const COPY: Record<MessageAction, { title: string; label: string; submit: string; required: boolean; hint: string }> = {
 		note: { title: 'Add note', label: 'Note', submit: 'Save note', required: true, hint: 'Only staff see notes.' },
 		comment: { title: 'Message tenant', label: 'Message', submit: 'Send message', required: true, hint: 'Tenants on the lease see this.' },
 		complete: { title: 'Mark complete', label: 'Completion note (optional)', submit: 'Mark complete', required: false, hint: 'Tenants see this note.' },
-		cancel: { title: 'Cancel repair', label: 'Reason', submit: 'Cancel repair', required: true, hint: 'Tenants see this reason.' }
+		cancel: { title: 'Cancel repair', label: 'Reason', submit: 'Cancel repair', required: true, hint: 'Tenants see this reason.' },
+		cancel_visit: { title: 'Cancel visit', label: 'Reason (optional)', submit: 'Cancel visit', required: false, hint: 'Tenants see this reason.' }
 	};
 
-	let { open = $bindable(false), org, ticketId, action, onsaved }: { open?: boolean; org: string; ticketId: number; action: MessageAction; onsaved: () => void } = $props();
+	let { open = $bindable(false), org, ticketId, visitId, action, onsaved }: { open?: boolean; org: string; ticketId: number; visitId?: number; action: MessageAction; onsaved: () => void } = $props();
 
 	const copy = $derived(COPY[action]);
 	let text = $state('');
@@ -31,6 +32,7 @@
 		try {
 			if (action === 'note' || action === 'comment') await api('POST', `${base}/events`, { kind: action, body: text });
 			else if (action === 'complete') await api('POST', `${base}/complete`, { note: text });
+			else if (action === 'cancel_visit') await api('POST', `${base}/visits/${visitId}/cancel`, { reason: text });
 			else await api('POST', `${base}/cancel`, { reason: text });
 			open = false;
 			onsaved();
@@ -53,7 +55,7 @@
 			</fieldset>
 			<div class="modal-action">
 				<Button variant="secondary" disabled={busy} onclick={close}>Close</Button>
-				<Button type="submit" variant={action === 'cancel' ? 'danger' : 'primary'} {busy}>{busy ? 'Saving…' : copy.submit}</Button>
+				<Button type="submit" variant={action === 'cancel' || action === 'cancel_visit' ? 'danger' : 'primary'} {busy}>{busy ? 'Saving…' : copy.submit}</Button>
 			</div>
 		</form>
 	{/snippet}

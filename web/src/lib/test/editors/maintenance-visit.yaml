@@ -1,0 +1,21 @@
+id: maintenance-visit
+component: VisitDialog
+props:
+  open: true
+  org: acme
+  ticket: {id: 7, supplier: {id: 4, name: Fitzroy Plumbing}}
+  visit: null
+callbacks: [onsaved]
+api:
+  GET /api/v1/orgs/acme/contacts?kind=supplier: [{id: 4, name: Fitzroy Plumbing}]
+ready: Arrive from
+fill: {Date: "2026-11-24", Arrive from: "09:00", Arrive by: "11:00"}
+submit: Book visit
+request: POST /api/v1/orgs/acme/maintenance/7/visits
+contract:
+  blocks_duplicate_submit: true
+  preserves_input_on: 422
+  cancel: Cancel
+  busy_dismiss_blocked: true
+  dirty_dismiss_confirms: true
+  dirty_navigation_blocked: true
