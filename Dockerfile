@@ -17,6 +17,7 @@ RUN --mount=type=secret,id=laptop_ca,target=/etc/ssl/certs/ca-certificates.crt \
 COPY . .
 COPY --from=web /src/internal/webui/dist/. /src/internal/webui/dist/
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /shigoto ./cmd/shigoto
+RUN install -d -m 0700 /data/files
 
 # Preserve the notices required when redistributing the compiled dependencies.
 RUN CGO_ENABLED=0 go list -deps -f '{{with .Module}}{{if not .Main}}{{.Dir}}{{end}}{{end}}' ./cmd/shigoto > /tmp/module-dirs \
@@ -36,5 +37,6 @@ FROM scratch
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=build /shigoto /shigoto
 COPY --from=build /licenses /licenses
+COPY --from=build --chown=65532:65532 /data/files /data/files
 USER 65532:65532
 ENTRYPOINT ["/shigoto"]

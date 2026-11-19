@@ -274,6 +274,9 @@ docker compose up -d --build
 docker compose exec -T app /shigoto admin populate-sbx
 ```
 
+Local Compose stores uploaded and sandbox media in the `files` named volume,
+which survives container rebuilds alongside the `pgdata` database volume.
+
 **Development only. Rerunning replaces all records and tester edits inside the
 command's sandbox organisations, and rotates the generated staff passwords.**
 Unrelated development organisations and accounts remain unchanged. Population

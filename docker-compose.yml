@@ -36,12 +36,16 @@ services:
       SHIGOTO_LISTEN: ":8080"
       SHIGOTO_DATABASE_URL: "postgres://shigoto:shigoto@db:5432/shigoto?sslmode=disable"
       SHIGOTO_BASE_URL: "http://localhost:8080"
+      SHIGOTO_FILES_DIR: "/data/files"
       SHIGOTO_SMTP_HOST: "mailpit"
       SHIGOTO_SMTP_PORT: "1025"
       SHIGOTO_SMTP_FROM: "noreply@shigoto.local"
       SHIGOTO_SMTP_TLS: "none"
+    volumes:
+      - files:/data/files
     ports:
       - "8080:8080"
 
 volumes:
   pgdata:
+  files:
