@@ -42,6 +42,10 @@ func TestPopulateScenarios(t *testing.T) {
 		"paid":                   `SELECT count(*) FROM invoices WHERE status='paid' AND org_id=$1`,
 		"void":                   `SELECT count(*) FROM invoices WHERE status='void' AND org_id=$1`,
 		"partial":                `SELECT count(*) FROM invoices i WHERE status='open' AND org_id=$1 AND (SELECT coalesce(sum(amount),0) FROM payments WHERE invoice_id=i.id) BETWEEN 1 AND i.total-1`,
+		"strata schemes":         `SELECT count(*) FROM strata_schemes WHERE org_id=$1`,
+		"shared strata scheme":   `SELECT count(*) FROM (SELECT strata_scheme_id FROM properties WHERE org_id=$1 AND strata_scheme_id IS NOT NULL GROUP BY 1 HAVING count(*) > 1) s`,
+		"all strata positions":   `SELECT count(*) FROM strata_schemes WHERE org_id=$1 AND is_chairperson AND is_secretary AND is_treasurer`,
+		"unlinked properties":    `SELECT count(*) FROM properties WHERE org_id=$1 AND strata_scheme_id IS NULL`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			args := []any{main}

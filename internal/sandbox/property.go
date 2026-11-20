@@ -116,8 +116,41 @@ func seedProperties(ctx context.Context, tx pgx.Tx, orgID int64, today time.Time
 			return nil, err
 		}
 	}
-	if _, err := property.CreateProperty(ctx, tx, orgID, property.Property{Name: "Vacant Apartment", Address: "6 Test Court, Brisbane QLD", Kind: "unit", Residential: true}); err != nil {
+	vacant, err := property.CreateProperty(ctx, tx, orgID, property.Property{Name: "Vacant Apartment", Address: "6 Test Court, Brisbane QLD", Kind: "unit", Residential: true})
+	if err != nil {
 		return nil, err
 	}
+	if main {
+		// properties is River Cottage, Garden Terrace, Market Studio, Previous Home.
+		if err := seedStrata(ctx, tx, orgID, properties[1], vacant, properties[2]); err != nil {
+			return nil, err
+		}
+	}
 	return properties, nil
+}
+
+// seedStrata adds two example strata schemes: one shared by two lots with
+// every executive position held (one lot owner can hold them all in QLD),
+// and one single-lot scheme with only the secretary position held.
+func seedStrata(ctx context.Context, tx pgx.Tx, orgID int64, terrace, vacant, studio property.Property) error {
+	examples := []struct {
+		scheme     property.StrataScheme
+		properties []property.Property
+	}{
+		{property.StrataScheme{Name: "Garden Terrace Body Corporate", CTSNumber: "54321",
+			IsChairperson: true, IsSecretary: true, IsTreasurer: true}, []property.Property{terrace, vacant}},
+		{property.StrataScheme{Name: "Market Studio Owners", IsSecretary: true}, []property.Property{studio}},
+	}
+	for _, ex := range examples {
+		s, err := property.CreateStrataScheme(ctx, tx, orgID, ex.scheme)
+		if err != nil {
+			return err
+		}
+		for _, p := range ex.properties {
+			if err := property.SetPropertyStrataScheme(ctx, tx, orgID, p.ID, &s.ID); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
