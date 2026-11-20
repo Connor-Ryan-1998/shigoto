@@ -319,6 +319,31 @@ git commit -m "feat(web): strata tab with role sections"
 
 ---
 
+### Task 5: Sandbox examples
+
+Added at the user's request after plan approval.
+
+**Files:**
+- Modify: `internal/sandbox/property.go` (seed schemes after properties, main org only)
+- Modify: `internal/sandbox/reset.go:66-72` (delete `strata_schemes` after `properties`)
+- Modify: `internal/sandbox/scenarios_integration_test.go` (assertions)
+
+**Interfaces:**
+- Consumes: Task 1 `CreateStrataScheme`, `SetPropertyStrataScheme`.
+
+Examples (main sandbox org only):
+- "Garden Terrace Body Corporate", CTS `"54321"`, all three positions held, linked to **Garden Terrace** and **Vacant Apartment** (shared scheme; one lot owner holding every role).
+- "Market Studio Owners", no CTS, only Secretary held, linked to **Market Studio**.
+- River Cottage and Previous Home stay unlinked.
+
+- [ ] **Step 1: Failing test** — in `TestPopulateScenarios` add counts (main org): `"strata schemes"` `SELECT count(*) FROM strata_schemes WHERE org_id=$1` ≥ 1; `"shared strata scheme"` `SELECT count(*) FROM (SELECT strata_scheme_id FROM properties WHERE org_id=$1 AND strata_scheme_id IS NOT NULL GROUP BY 1 HAVING count(*) > 1) s` ≥ 1; `"all strata positions"` `SELECT count(*) FROM strata_schemes WHERE org_id=$1 AND is_chairperson AND is_secretary AND is_treasurer` ≥ 1.
+- [ ] **Step 2: Run** `uv run --locked task test SUITE=integration PACKAGES=./internal/sandbox/...` — Expected: the three new subtests FAIL.
+- [ ] **Step 3: Implement** seeding and reset deletion.
+- [ ] **Step 4: Run** same command — Expected: PASS, including reset/repopulate tests (`TestPopulateReplacesTesterEdits`).
+- [ ] **Step 5: Commit** `feat(sandbox): strata scheme examples`
+
+---
+
 ## Not in this plan
 
-Role workflows, levies, meetings, scheme list route, scheme deletion, portal exposure, sandbox seed data (spec marks it optional).
+Role workflows, levies, meetings, scheme list route, scheme deletion, portal exposure.
