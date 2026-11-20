@@ -40,9 +40,9 @@ type File struct {
 }
 
 // Seed is the data created before a file's cases run. Every map key is a
-// seed name; names are unique across Users, Contacts, Invoices, Properties,
-// Leases, Projects, Tasks and Invites and resolve to row IDs in `{name}`
-// tokens.
+// seed name; names are unique across Users, Contacts, Invoices,
+// StrataSchemes, Properties, Leases, Projects, Tasks and Invites and resolve
+// to row IDs in `{name}` tokens.
 type Seed struct {
 	Orgs       []string                `yaml:"orgs"`
 	Modules    map[string]bool         `yaml:"modules"` // nil: all enabled
@@ -50,13 +50,15 @@ type Seed struct {
 	Contacts   map[string]SeedContact  `yaml:"contacts"`
 	Invoices   map[string]SeedInvoice  `yaml:"invoices"`
 	Properties map[string]SeedProperty `yaml:"properties"`
-	Leases     map[string]SeedLease    `yaml:"leases"`
-	Payments   map[string]SeedPayment  `yaml:"payments"`
-	Tickets    map[string]SeedTicket   `yaml:"tickets"`
-	Projects   map[string]SeedProject  `yaml:"projects"`
-	Tasks      map[string]SeedTask     `yaml:"tasks"`
-	Invites    map[string]SeedInvite   `yaml:"invites"`
-	Settings   map[string]SeedSettings `yaml:"settings"` // key is the org slug
+	// StrataSchemes are seeded before Properties, which may link to them.
+	StrataSchemes map[string]SeedStrataScheme `yaml:"strata_schemes"`
+	Leases        map[string]SeedLease        `yaml:"leases"`
+	Payments      map[string]SeedPayment      `yaml:"payments"`
+	Tickets       map[string]SeedTicket       `yaml:"tickets"`
+	Projects      map[string]SeedProject      `yaml:"projects"`
+	Tasks         map[string]SeedTask         `yaml:"tasks"`
+	Invites       map[string]SeedInvite       `yaml:"invites"`
+	Settings      map[string]SeedSettings     `yaml:"settings"` // key is the org slug
 }
 
 // SeedUser is a member of Org with Role. Contact (a seed contact name in
@@ -86,10 +88,21 @@ type SeedInvoice struct {
 }
 
 // SeedProperty is a property in Org, residential unless Commercial.
+// StrataScheme, when set, names a seed strata scheme in the same org the
+// property is linked to.
 type SeedProperty struct {
-	Org        string `yaml:"org"`
-	Name       string `yaml:"name"`
-	Commercial bool   `yaml:"commercial"`
+	Org          string `yaml:"org"`
+	Name         string `yaml:"name"`
+	Commercial   bool   `yaml:"commercial"`
+	StrataScheme string `yaml:"strata_scheme"`
+}
+
+// SeedStrataScheme is a strata scheme in Org with no positions held. CTS
+// is its optional community titles scheme number.
+type SeedStrataScheme struct {
+	Org  string `yaml:"org"`
+	Name string `yaml:"name"`
+	CTS  string `yaml:"cts"`
 }
 
 // SeedLease is a lease on the seed property Property with the seed contact
@@ -259,6 +272,7 @@ func (s Seed) seedNames() map[string]string {
 	add("users", sortedKeys(s.Users))
 	add("contacts", sortedKeys(s.Contacts))
 	add("invoices", sortedKeys(s.Invoices))
+	add("strata_schemes", sortedKeys(s.StrataSchemes))
 	add("properties", sortedKeys(s.Properties))
 	add("leases", sortedKeys(s.Leases))
 	add("payments", sortedKeys(s.Payments))
@@ -316,6 +330,7 @@ func (f File) Validate() error {
 		{"users", sortedKeys(s.Users)},
 		{"contacts", sortedKeys(s.Contacts)},
 		{"invoices", sortedKeys(s.Invoices)},
+		{"strata_schemes", sortedKeys(s.StrataSchemes)},
 		{"properties", sortedKeys(s.Properties)},
 		{"leases", sortedKeys(s.Leases)},
 		{"payments", sortedKeys(s.Payments)},
@@ -380,8 +395,21 @@ func (f File) Validate() error {
 			seedErr("%s: negative amount %d", where, inv.Amount)
 		}
 	}
+	for _, name := range sortedKeys(s.StrataSchemes) {
+		checkOrg("strata_schemes."+name, s.StrataSchemes[name].Org)
+	}
 	for _, name := range sortedKeys(s.Properties) {
-		checkOrg("properties."+name, s.Properties[name].Org)
+		p := s.Properties[name]
+		where := "properties." + name
+		checkOrg(where, p.Org)
+		if p.StrataScheme == "" {
+			continue
+		}
+		if sc, ok := s.StrataSchemes[p.StrataScheme]; !ok {
+			seedErr("%s: strata_scheme: unknown strata scheme %q", where, p.StrataScheme)
+		} else if sc.Org != p.Org {
+			seedErr("%s: strata_scheme: scheme %q is in org %q, not %q", where, p.StrataScheme, sc.Org, p.Org)
+		}
 	}
 	for _, name := range sortedKeys(s.Leases) {
 		l := s.Leases[name]

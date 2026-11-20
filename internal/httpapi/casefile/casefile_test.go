@@ -201,6 +201,19 @@ func TestValidateRejectsBadSeedAndCases(t *testing.T) {
 		{"duplicate name across maps", func(f *File) {
 			f.Seed.Properties = map[string]SeedProperty{"c_foreign": {Org: "other"}}
 		}, []string{"c_foreign", "duplicate"}},
+		{"unknown strata scheme org", func(f *File) {
+			f.Seed.StrataSchemes = map[string]SeedStrataScheme{"s": {Org: "nope", Name: "S"}}
+		}, []string{"strata_schemes.s", "nope"}},
+		{"unknown property strata scheme", func(f *File) {
+			f.Seed.Properties = map[string]SeedProperty{"p": {Org: "acme", StrataScheme: "ghost"}}
+		}, []string{"properties.p", "ghost"}},
+		{"cross-org property strata scheme", func(f *File) {
+			f.Seed.StrataSchemes = map[string]SeedStrataScheme{"s": {Org: "other", Name: "S"}}
+			f.Seed.Properties = map[string]SeedProperty{"p": {Org: "acme", StrataScheme: "s"}}
+		}, []string{"properties.p", "s", "other"}},
+		{"strata scheme name collides", func(f *File) {
+			f.Seed.StrataSchemes = map[string]SeedStrataScheme{"owner": {Org: "acme", Name: "S"}}
+		}, []string{"owner", "duplicate"}},
 		{"unknown lease property", func(f *File) {
 			f.Seed.Leases = map[string]SeedLease{"l": {Org: "other", Property: "p", Tenant: "c_foreign"}}
 		}, []string{"l", "p"}},

@@ -62,8 +62,8 @@ cases:
 ```
 
 - **Seed kinds:** `orgs`, `modules`, `users`, `contacts`, `invoices`,
-  `properties`, `leases`, `projects`, `tasks`, `invites`, `settings`. The
-  loader rejects unknown keys.
+  `strata_schemes`, `properties` (optional `strata_scheme` link), `leases`,
+  `projects`, `tasks`, `invites`, `settings`. The loader rejects unknown keys.
 - **Interpolation:** `{name}` becomes a seeded record's ID. An unknown name
   fails the load. There are no other expressions.
 - **Writes:** a case that expects a successful write must set

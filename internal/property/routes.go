@@ -102,6 +102,7 @@ func registerRoutes(mux *http.ServeMux, d module.Deps) {
 	registerRentalRoutes(mux, d)
 	registerStatementRoutes(mux, d)
 	registerMaintenanceRoutes(mux, d)
+	registerStrataRoutes(mux, d)
 	mux.Handle("POST /api/v1/orgs/{org}/properties",
 		d.Auth.RequireOrg(auth.PermPropertyWrite)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			createProperty(w, r, d)
@@ -226,6 +227,8 @@ type propertyDetailResponse struct {
 	WaterAccountRef    string           `json:"water_account_ref"`
 	Notes              string           `json:"notes"`
 	CurrentTenancy     *tenancyResponse `json:"current_tenancy"`
+	// StrataScheme is the scheme the property is a lot in, or null.
+	StrataScheme *strataSchemeResponse `json:"strata_scheme"`
 }
 
 func formatDatePtr(t *time.Time) *string {
@@ -468,6 +471,15 @@ func writePropertyDetail(w http.ResponseWriter, r *http.Request, d module.Deps, 
 		PurchaseLegalCosts: int64Ptr(prop.PurchaseLegalCosts), YearBuilt: prop.YearBuilt,
 		LotPlan: prop.LotPlan, LandAreaM2: prop.LandAreaM2,
 		CouncilAccountRef: prop.CouncilAccountRef, WaterAccountRef: prop.WaterAccountRef, Notes: prop.Notes,
+	}
+	if prop.StrataSchemeID != nil {
+		s, err := GetStrataScheme(r.Context(), d.Pool, prop.OrgID, *prop.StrataSchemeID)
+		if err != nil {
+			module.WriteCoreError(w, err)
+			return
+		}
+		sr := strataSchemeToResponse(s)
+		resp.StrataScheme = &sr
 	}
 	if tenancy != nil {
 		var name string

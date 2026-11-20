@@ -123,6 +123,14 @@ func seedCaseWorld(t *testing.T, s casefile.Seed) *caseWorld {
 		}
 		ids[name] = users[name].ID
 	}
+	for _, name := range sortedKeys(s.StrataSchemes) {
+		sc := s.StrataSchemes[name]
+		opts := []testkit.StrataSchemeOption{testkit.CTSNumber(sc.CTS)}
+		if sc.Name != "" {
+			opts = append(opts, testkit.SchemeName(sc.Name))
+		}
+		ids[name] = e.StrataScheme(orgs[sc.Org], opts...).ID
+	}
 	for _, name := range sortedKeys(s.Properties) {
 		p := s.Properties[name]
 		var opts []testkit.PropertyOption
@@ -133,6 +141,12 @@ func seedCaseWorld(t *testing.T, s casefile.Seed) *caseWorld {
 			opts = append(opts, testkit.Commercial())
 		}
 		ids[name] = e.Property(orgs[p.Org], opts...).ID
+		if p.StrataScheme != "" {
+			scheme := ids[p.StrataScheme]
+			if err := property.SetPropertyStrataScheme(e.Ctx, e.Pool, orgs[p.Org].ID, ids[name], &scheme); err != nil {
+				t.Fatalf("properties.%s: strata_scheme: %v", name, err)
+			}
+		}
 	}
 	leaseInvoices := map[string][]int64{}
 	for _, name := range sortedKeys(s.Leases) {

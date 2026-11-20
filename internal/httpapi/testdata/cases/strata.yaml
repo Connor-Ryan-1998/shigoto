@@ -1,0 +1,168 @@
+# Strata scheme routes: listing, create/update, linking a property, and the
+# scheme on the property detail. Field rules (trimming, CTS uniqueness,
+# org scoping) are owned by the property store tests in
+# internal/property/strata_integration_test.go; these cases pin how the
+# routes map them to HTTP, plus permissions and isolation.
+seed:
+  orgs: [acme, other]
+  users:
+    owner: {org: acme, role: owner}
+    keeper: {org: acme, role: bookkeeper}
+    other_owner: {org: other, role: owner}
+  strata_schemes:
+    s_harbour: {org: acme, name: Harbour View CTS, cts: "12345"}
+    s_other: {org: other, name: Elsewhere CTS}
+  properties:
+    p_unit1: {org: acme, name: Unit 1, strata_scheme: s_harbour}
+    p_unit2: {org: acme, name: Unit 2}
+    p_other: {org: other, name: Far Unit}
+
+cases:
+  - name: owner lists schemes
+    as: [owner, keeper]
+    request: {method: GET, path: /api/v1/orgs/acme/strata-schemes}
+    expect:
+      status: 200
+      body:
+        - id: "{s_harbour}"
+          name: Harbour View CTS
+          cts_number: "12345"
+          is_chairperson: false
+          is_secretary: false
+          is_treasurer: false
+          properties: [{id: "{p_unit1}", name: Unit 1}]
+
+  - name: property detail includes its scheme
+    as: owner
+    request: {method: GET, path: "/api/v1/orgs/acme/properties/{p_unit1}"}
+    expect:
+      status: 200
+      body: {strata_scheme: {id: "{s_harbour}", name: Harbour View CTS, properties: [{id: "{p_unit1}", name: Unit 1}]}}
+
+  - name: unlinked property detail has no scheme
+    as: owner
+    request: {method: GET, path: "/api/v1/orgs/acme/properties/{p_unit2}"}
+    expect: {status: 200, body: {strata_scheme: null}}
+
+  - name: owner creates a scheme
+    as: owner
+    isolate: true
+    request:
+      method: POST
+      path: /api/v1/orgs/acme/strata-schemes
+      body: {name: Bayside, cts_number: "", is_chairperson: false, is_secretary: false, is_treasurer: true}
+    expect:
+      status: 201
+      body: {name: Bayside, cts_number: "", is_chairperson: false, is_secretary: false, is_treasurer: true, properties: []}
+
+  - name: duplicate CTS is rejected
+    as: owner
+    request:
+      method: POST
+      path: /api/v1/orgs/acme/strata-schemes
+      body: {name: Dup, cts_number: "12345"}
+    expect: {status: 422, body: {error: "invalid input: cts_number is already used by another scheme in this organisation"}, exact: true}
+    unchanged: [strata_schemes, audit_log]
+
+  - name: blank scheme name is rejected
+    as: owner
+    request:
+      method: POST
+      path: /api/v1/orgs/acme/strata-schemes
+      body: {name: "  "}
+    expect: {status: 422, body: {error: "invalid input: name is required"}, exact: true}
+    unchanged: [strata_schemes, audit_log]
+
+  - name: owner sets every position
+    as: owner
+    isolate: true
+    request:
+      method: PUT
+      path: "/api/v1/orgs/acme/strata-schemes/{s_harbour}"
+      body: {name: Harbour View CTS, cts_number: "12345", is_chairperson: true, is_secretary: true, is_treasurer: true}
+    expect:
+      status: 200
+      body: {id: "{s_harbour}", is_chairperson: true, is_secretary: true, is_treasurer: true, properties: [{id: "{p_unit1}", name: Unit 1}]}
+
+  - name: owner links a property
+    as: owner
+    isolate: true
+    request:
+      method: PUT
+      path: "/api/v1/orgs/acme/properties/{p_unit2}/strata"
+      body: {strata_scheme_id: "{s_harbour}"}
+    expect:
+      status: 200
+      body: {strata_scheme: {id: "{s_harbour}", properties: [{id: "{p_unit1}", name: Unit 1}, {id: "{p_unit2}", name: Unit 2}]}}
+
+  - name: owner unlinks a property
+    as: owner
+    isolate: true
+    request:
+      method: PUT
+      path: "/api/v1/orgs/acme/properties/{p_unit1}/strata"
+      body: {strata_scheme_id: null}
+    expect: {status: 200, body: {strata_scheme: null}, exact: true}
+
+  - name: cannot link another org's scheme
+    as: owner
+    request:
+      method: PUT
+      path: "/api/v1/orgs/acme/properties/{p_unit2}/strata"
+      body: {strata_scheme_id: "{s_other}"}
+    expect: {status: 404, body: {error: not found}, exact: true}
+    unchanged: [properties, audit_log]
+
+  - name: cannot link another org's property
+    as: owner
+    request:
+      method: PUT
+      path: "/api/v1/orgs/acme/properties/{p_other}/strata"
+      body: {strata_scheme_id: "{s_harbour}"}
+    expect: {status: 404, body: {error: not found}, exact: true}
+    unchanged: [properties, audit_log]
+
+  - name: another org cannot edit a scheme
+    as: other_owner
+    request:
+      method: PUT
+      path: "/api/v1/orgs/other/strata-schemes/{s_harbour}"
+      body: {name: Stolen}
+    expect: {status: 404, body: {error: not found}, exact: true}
+    unchanged: [strata_schemes, audit_log]
+
+  - name: bookkeeper cannot create a scheme
+    as: keeper
+    request:
+      method: POST
+      path: /api/v1/orgs/acme/strata-schemes
+      body: {name: Nope}
+    expect: {status: 403, body: {error: forbidden}, exact: true}
+    unchanged: [strata_schemes, audit_log]
+
+  - name: bookkeeper cannot edit a scheme
+    as: keeper
+    request:
+      method: PUT
+      path: "/api/v1/orgs/acme/strata-schemes/{s_harbour}"
+      body: {name: Nope}
+    expect: {status: 403, body: {error: forbidden}, exact: true}
+    unchanged: [strata_schemes, audit_log]
+
+  - name: bookkeeper cannot link a property
+    as: keeper
+    request:
+      method: PUT
+      path: "/api/v1/orgs/acme/properties/{p_unit2}/strata"
+      body: {strata_scheme_id: "{s_harbour}"}
+    expect: {status: 403, body: {error: forbidden}, exact: true}
+    unchanged: [properties, audit_log]
+
+  - name: unknown link field is rejected
+    as: owner
+    request:
+      method: PUT
+      path: "/api/v1/orgs/acme/properties/{p_unit2}/strata"
+      body: {strata_scheme_id: null, extra: 1}
+    expect: {status: 400, body: {error: invalid request body}, exact: true}
+    unchanged: [properties, audit_log]
