@@ -22,6 +22,8 @@ import PortalRepairPage from '../../routes/portal/[org]/repairs/[id]/+page.svelt
 import VisitDialog from '../modules/property/VisitDialog.svelte';
 import RequestChangeDialog from '../modules/property/RequestChangeDialog.svelte';
 import PropertyNotesPage from '../../routes/[org]/properties/[id]/notes/+page.svelte';
+import StrataSection from '../modules/property/StrataSection.svelte';
+import StrataSchemeDialog from '../modules/property/StrataSchemeDialog.svelte';
 
 export const components = {
 	AssignSupplierDialog,
@@ -45,5 +47,7 @@ export const components = {
 	PortalRepairPage,
 	PropertyDetailsPage,
 	PropertyNotesPage,
-	SettingsPage
+	SettingsPage,
+	StrataSchemeDialog,
+	StrataSection
 } as const;

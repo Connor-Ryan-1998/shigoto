@@ -3,6 +3,7 @@ import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { setPage } from '../../../../lib/test/app.svelte';
 import { apiMock, deferred, mockApi } from '../../../../lib/test/mock-api';
 import { signIn } from '../../../../lib/test/session';
+import { propertyHeader } from '../../../../lib/modules/property/header.svelte';
 import Page from './+page.svelte';
 
 const base = '/api/v1/orgs/acme/properties/1';
@@ -74,6 +75,20 @@ describe('property details page', () => {
 		expect(screen.queryByRole('button', { name: 'Save details' })).toBeNull();
 		expect(screen.queryByRole('button', { name: 'Add policy' })).toBeNull();
 		expect(screen.getByLabelText('Name').matches(':disabled')).toBe(true);
+	});
+
+	it('flags the header when the property is linked to a strata scheme', async () => {
+		const scheme = { id: 3, name: 'Harbour View CTS', cts_number: '', is_chairperson: true, is_secretary: false, is_treasurer: false, properties: [{ id: 1, name: 'Cottage' }] };
+		mockApi({ [`GET ${base}`]: { ...cottage, strata_scheme: null }, [`GET ${base}/insurance`]: [],
+			'GET /api/v1/orgs/acme/strata-schemes': [scheme], [`PUT ${base}/strata`]: { strata_scheme: scheme } });
+		render(Page);
+		const strata = await screen.findByRole('region', { name: 'Strata' });
+		expect(propertyHeader.strata).toBe(false);
+		await fireEvent.click(within(strata).getByLabelText('Part of a strata scheme'));
+		await fireEvent.change(await within(strata).findByLabelText('Scheme', { exact: true }), { target: { value: '3' } });
+		await fireEvent.click(within(strata).getByRole('button', { name: 'Save strata' }));
+		await vi.waitFor(() => expect(propertyHeader.strata).toBe(true));
+		expect(propertyHeader.key).toBe('acme/1');
 	});
 
 	it('ignores a stale response after switching property', async () => {

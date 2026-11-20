@@ -11,8 +11,9 @@
 	import LoadState from '../../../../lib/components/LoadState.svelte';
 	import StatusBadge from '../../../../lib/components/StatusBadge.svelte';
 	import InsuranceDialog from '../../../../lib/modules/property/InsuranceDialog.svelte';
+	import StrataSection from '../../../../lib/modules/property/StrataSection.svelte';
 	import { propertyHeader } from '../../../../lib/modules/property/header.svelte';
-	import { centsInput, INSURANCE_TYPES, type InsurancePolicy, type PropertyDetail } from '../../../../lib/modules/property/types';
+	import { centsInput, INSURANCE_TYPES, type InsurancePolicy, type PropertyDetail, type StrataScheme } from '../../../../lib/modules/property/types';
 
 	type Form = {
 		name: string; address: string; kind: string; residential: boolean;
@@ -62,6 +63,11 @@
 		snapshot = JSON.stringify(form);
 		propertyHeader.key = scope;
 		propertyHeader.name = p.name;
+		propertyHeader.strata = p.strata_scheme != null;
+	}
+	function strataSaved(scheme: StrataScheme | null) {
+		if (property) property.strata_scheme = scheme;
+		if (propertyHeader.key === scope) propertyHeader.strata = scheme !== null;
 	}
 
 	async function load() {
@@ -223,6 +229,8 @@
 					</section>
 				</div>
 			</div>
+
+			<StrataSection {org} {property} onsaved={strataSaved} />
 
 			<section class="mt-6" aria-labelledby="insurance-heading">
 				<div class="mb-3 flex flex-wrap items-center gap-3">

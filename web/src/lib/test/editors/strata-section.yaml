@@ -1,0 +1,27 @@
+id: strata-section
+component: StrataSection
+props:
+  org: acme
+  property:
+    {id: 1, name: Cottage, address: 1 Main St, kind: house, residential: true, contract_date: null, settlement_date: null,
+     purchase_price: null, stamp_duty: null, purchase_legal_costs: null, year_built: null, lot_plan: "", land_area_m2: null,
+     council_account_ref: "", water_account_ref: "", notes: "", current_tenancy: null,
+     strata_scheme: {id: 3, name: Harbour View CTS, cts_number: "12345", is_chairperson: false, is_secretary: true,
+                     is_treasurer: false, properties: [{id: 1, name: Cottage}]}}
+callbacks: [onsaved]
+page: {org: acme, id: "1"}
+api:
+  GET /api/v1/orgs/acme/strata-schemes:
+    - {id: 3, name: Harbour View CTS, cts_number: "12345", is_chairperson: false, is_secretary: true,
+       is_treasurer: false, properties: [{id: 1, name: Cottage}]}
+fill: {Scheme name: Harbour View, Treasurer: "true"}
+submit: Save strata
+request: PUT /api/v1/orgs/acme/strata-schemes/3
+contract:
+  blocks_duplicate_submit: true
+  preserves_input_on: 422
+  busy_dismiss_blocked: Cancel
+  dirty_navigation_blocked: true
+skip:
+  cancel: page section; Cancel restores the last saved values (the section stays)
+  dirty_dismiss_confirms: page section, no dialog to dismiss; leaving is covered by dirty_navigation_blocked

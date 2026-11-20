@@ -1,0 +1,14 @@
+id: strata-scheme-create
+component: StrataSchemeDialog
+props: {open: true, org: acme}
+callbacks: [oncreated]
+fill: {Scheme name: Bayside, CTS number: "54321", Secretary: "true"}
+submit: Create scheme
+request: POST /api/v1/orgs/acme/strata-schemes
+contract:
+  blocks_duplicate_submit: true
+  preserves_input_on: 422
+  cancel: Cancel
+  busy_dismiss_blocked: true
+  dirty_dismiss_confirms: true
+  dirty_navigation_blocked: true

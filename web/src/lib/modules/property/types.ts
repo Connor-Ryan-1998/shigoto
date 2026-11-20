@@ -26,7 +26,33 @@ export type PropertyDetail = {
 	water_account_ref: string;
 	notes: string;
 	current_tenancy: Tenancy | null;
+	strata_scheme: StrataScheme | null;
 };
+
+// A QLD strata (body corporate) scheme; the is_* flags are the executive
+// committee positions the organisation holds in it.
+export type StrataScheme = {
+	id: number;
+	name: string;
+	cts_number: string;
+	is_chairperson: boolean;
+	is_secretary: boolean;
+	is_treasurer: boolean;
+	properties: { id: number; name: string }[];
+};
+
+export type StrataPosition = 'chairperson' | 'secretary' | 'treasurer';
+
+export const STRATA_POSITIONS: { value: StrataPosition; label: string; field: 'is_chairperson' | 'is_secretary' | 'is_treasurer' }[] = [
+	{ value: 'chairperson', label: 'Chairperson', field: 'is_chairperson' },
+	{ value: 'secretary', label: 'Secretary', field: 'is_secretary' },
+	{ value: 'treasurer', label: 'Treasurer', field: 'is_treasurer' }
+];
+
+// strataCtsError maps a rejected scheme save to a CTS number field error, or
+// null when the message is not about the CTS number.
+export const strataCtsError = (message: string) =>
+	message.includes('cts_number') ? 'Another scheme already uses this CTS number.' : null;
 
 export type InsuranceType = 'building' | 'landlord' | 'strata_contents' | 'other';
 
