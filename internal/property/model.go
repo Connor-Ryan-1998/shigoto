@@ -41,6 +41,9 @@ type Property struct {
 	// Notes is the property's free-text notes page, edited separately by
 	// UpdateNotes.
 	Notes string
+	// StrataSchemeID is the strata scheme the property is a lot in, if
+	// any; set only by SetPropertyStrataScheme.
+	StrataSchemeID *int64
 }
 
 // Tenancy summarises the lease active on a property on a given day.

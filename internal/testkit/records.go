@@ -179,6 +179,35 @@ func (e *Env) Property(org core.Org, opts ...PropertyOption) property.Property {
 	return p
 }
 
+// StrataSchemeOption customises Env.StrataScheme.
+type StrataSchemeOption func(*property.StrataScheme)
+
+// SchemeName sets the strata scheme name.
+func SchemeName(n string) StrataSchemeOption {
+	return func(s *property.StrataScheme) { s.Name = n }
+}
+
+// CTSNumber sets the strata scheme's community titles scheme number.
+func CTSNumber(n string) StrataSchemeOption {
+	return func(s *property.StrataScheme) { s.CTSNumber = n }
+}
+
+// StrataScheme creates a strata scheme in org. Defaults: "Test CTS", no
+// CTS number, no positions held.
+func (e *Env) StrataScheme(org core.Org, opts ...StrataSchemeOption) property.StrataScheme {
+	e.T.Helper()
+	in := property.StrataScheme{Name: "Test CTS"}
+	for _, opt := range opts {
+		opt(&in)
+	}
+	s, err := property.CreateStrataScheme(e.Ctx, e.Pool, org.ID, in)
+	if err != nil {
+		e.T.Fatalf("creating strata scheme %q in %s: %v", in.Name, org.Slug, err)
+		return property.StrataScheme{}
+	}
+	return s
+}
+
 // LeaseOption customises Env.Lease.
 type LeaseOption func(*property.NewLease)
 

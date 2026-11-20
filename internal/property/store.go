@@ -36,14 +36,14 @@ func ParseFrequency(s string) (Frequency, error) {
 
 const propertyColumns = `id, org_id, name, coalesce(address,''), coalesce(kind,''), residential,
 	contract_date, settlement_date, purchase_price, stamp_duty, purchase_legal_costs, year_built,
-	coalesce(lot_plan,''), land_area_m2::float8, coalesce(council_account_ref,''), coalesce(water_account_ref,''), notes`
+	coalesce(lot_plan,''), land_area_m2::float8, coalesce(council_account_ref,''), coalesce(water_account_ref,''), notes, strata_scheme_id`
 
 func scanProperty(row pgx.Row) (Property, error) {
 	var p Property
 	var price, duty, legal *int64
 	err := row.Scan(&p.ID, &p.OrgID, &p.Name, &p.Address, &p.Kind, &p.Residential,
 		&p.ContractDate, &p.SettlementDate, &price, &duty, &legal, &p.YearBuilt,
-		&p.LotPlan, &p.LandAreaM2, &p.CouncilAccountRef, &p.WaterAccountRef, &p.Notes)
+		&p.LotPlan, &p.LandAreaM2, &p.CouncilAccountRef, &p.WaterAccountRef, &p.Notes, &p.StrataSchemeID)
 	p.PurchasePrice, p.StampDuty, p.PurchaseLegalCosts = centsPtr(price), centsPtr(duty), centsPtr(legal)
 	return p, err
 }
