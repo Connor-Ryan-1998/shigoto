@@ -63,9 +63,12 @@
 	}
 
 	// Re-seed only when a different property is shown, so saving the
-	// property's details never discards unsaved strata edits.
+	// property's details never discards unsaved strata edits. The id is a
+	// primitive $derived so replacing the property object (a details save)
+	// does not re-run the effect.
+	const propertyId = $derived(property.id);
 	$effect(() => {
-		property.id; org;
+		propertyId; org;
 		untrack(() => {
 			reset(property.strata_scheme ?? null);
 			schemes = linked ? [linked] : [];

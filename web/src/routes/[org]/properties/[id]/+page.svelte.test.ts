@@ -91,6 +91,18 @@ describe('property details page', () => {
 		expect(propertyHeader.key).toBe('acme/1');
 	});
 
+	it('keeps unsaved strata edits when the details are saved', async () => {
+		const scheme = { id: 3, name: 'Harbour', cts_number: '', is_chairperson: false, is_secretary: false, is_treasurer: false, properties: [{ id: 1, name: 'Cottage' }] };
+		const linked = { ...cottage, strata_scheme: scheme };
+		mockApi({ [`GET ${base}`]: linked, [`GET ${base}/insurance`]: [], 'GET /api/v1/orgs/acme/strata-schemes': [scheme], [`PUT ${base}`]: linked });
+		render(Page);
+		const name = await screen.findByLabelText('Scheme name', { exact: true });
+		await fireEvent.input(name, { target: { value: 'Edited' } });
+		await fireEvent.click(screen.getByRole('button', { name: 'Save details' }));
+		expect(await screen.findByText('Details saved.')).toBeTruthy();
+		expect((screen.getByLabelText('Scheme name', { exact: true }) as HTMLInputElement).value).toBe('Edited');
+	});
+
 	it('ignores a stale response after switching property', async () => {
 		const slow = deferred();
 		mockApi({ [`GET ${base}`]: slow.promise, [`GET ${base}/insurance`]: [],
