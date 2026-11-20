@@ -13,8 +13,10 @@
 	const key = $derived(`${org}/${id}`);
 	const canRead = $derived(session.currentOrg?.slug === org && (session.currentOrg?.perms.includes('property_read') ?? false));
 	const base = $derived(`/${org}/properties/${id}`);
+	const strata = $derived(propertyHeader.key === key && propertyHeader.strata);
 	const sections = $derived([
 		{ href: base, label: 'Details' },
+		...(strata ? [{ href: `${base}/strata`, label: 'Strata' }] : []),
 		{ href: `${base}/bills`, label: 'Bills' },
 		{ href: `${base}/depreciation`, label: 'Depreciation' },
 		{ href: `${base}/notes`, label: 'Notes' },
@@ -28,9 +30,13 @@
 		const k = key;
 		if (!canRead || !org || !id) return;
 		const token = ++seq;
-		if (propertyHeader.key !== k) { propertyHeader.key = k; propertyHeader.name = ''; }
-		api<{ name: string }>('GET', `/api/v1/orgs/${org}/properties/${id}`)
-			.then((p) => { if (token === seq && propertyHeader.key === k) propertyHeader.name = p.name; })
+		if (propertyHeader.key !== k) { propertyHeader.key = k; propertyHeader.name = ''; propertyHeader.strata = false; }
+		api<{ name: string; strata_scheme: unknown }>('GET', `/api/v1/orgs/${org}/properties/${id}`)
+			.then((p) => {
+				if (token !== seq || propertyHeader.key !== k) return;
+				propertyHeader.name = p.name;
+				propertyHeader.strata = p.strata_scheme != null;
+			})
 			.catch(() => {});
 		return () => { seq++; };
 	});
