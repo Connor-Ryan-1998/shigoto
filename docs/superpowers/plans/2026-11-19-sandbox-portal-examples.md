@@ -32,7 +32,7 @@ Files: `internal/sandbox/reset.go`, `internal/sandbox/reset_integration_test.go`
 - [x] Add a failing test for resetting ticket files, events, availability, visits and pending uploads.
 - [x] Assert unrelated maintenance survives and foreign references abort transactionally.
 - [x] Delete children in ownership-safe order; scope ticket files through their ticket.
-- [ ] Run sandbox integration tests through `uv run --locked task test SUITE=integration PACKAGES=./internal/sandbox`.
+- [x] Run sandbox integration tests through `uv run --locked task test SUITE=integration PACKAGES=./internal/sandbox`.
 
 ### Task 2: Complete portal scenarios and stored media
 
@@ -43,7 +43,7 @@ Files: sandbox population/scenario seeders and integration tests, new maintenanc
 - [x] Seed scenarios through domain functions and write tiny embedded media through staging.
 - [x] Test storage failure rollback, serving seeded media, tenant visibility and reruns.
 - [x] Document example locations, fictional media and retained tester uploads.
-- [ ] Run sandbox integration tests, then application unit/integration checks and lint sequentially.
+- [x] Run sandbox integration tests, then application unit/integration checks and lint sequentially.
 
 ## Execution notes
 
@@ -55,3 +55,6 @@ Files: sandbox population/scenario seeders and integration tests, new maintenanc
 - Ruling: retain tiny demo blobs on unknown commit outcomes rather than query
   again over an unreliable connection. The cost is possible orphan demo bytes;
   this avoids broken committed file references. Confirmed rollbacks still clean up.
+- Final `uv run --locked task verify` passed: build, lint, Go unit/integration
+  tests, 587 web tests and 15 browser tests. This includes the lost-COMMIT-reply
+  regression test after the fix.
