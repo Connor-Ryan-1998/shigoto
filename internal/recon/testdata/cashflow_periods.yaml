@@ -1,0 +1,46 @@
+- name: before July rollover
+  today: "2026-06-30"
+  month: 7
+  period: current
+  from: "2025-07-01"
+  to: "2026-06-30"
+- name: on July rollover
+  today: "2026-07-01"
+  month: 7
+  period: current
+  from: "2026-07-01"
+  to: "2027-06-30"
+- name: previous July year
+  today: "2026-07-01"
+  month: 7
+  period: previous
+  from: "2025-07-01"
+  to: "2026-06-30"
+- name: January year
+  today: "2026-11-21"
+  month: 1
+  period: current
+  from: "2026-01-01"
+  to: "2026-12-31"
+- name: April year
+  today: "2026-11-21"
+  month: 4
+  period: current
+  from: "2026-04-01"
+  to: "2027-03-31"
+- name: leap year ending February
+  today: "2024-02-29"
+  month: 3
+  period: current
+  from: "2023-03-01"
+  to: "2024-02-29"
+- name: invalid month
+  today: "2026-11-21"
+  month: 0
+  period: current
+  error: true
+- name: invalid period
+  today: "2026-11-21"
+  month: 7
+  period: other
+  error: true

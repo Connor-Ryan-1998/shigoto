@@ -68,6 +68,10 @@ func dashboardSection(ctx context.Context, q core.Querier, orgID int64, _ time.T
 }
 
 func registerRoutes(mux *http.ServeMux, d module.Deps) {
+	mux.Handle("GET /api/v1/orgs/{org}/cash-flow",
+		d.Auth.RequireOrg(auth.PermReportsRead)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			cashFlowHandler(w, r, d)
+		})))
 	mux.Handle("POST /api/v1/orgs/{org}/bank-accounts",
 		d.Auth.RequireOrg(auth.PermReconWrite)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			createBankAccount(w, r, d)

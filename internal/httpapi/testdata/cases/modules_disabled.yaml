@@ -14,6 +14,11 @@ seed:
     lease: {org: acme, property: prop, tenant: c_tenant}
 
 cases:
+  - name: cash flow is gone when reconciliation is disabled
+    as: owner
+    request: {method: GET, path: /api/v1/orgs/acme/cash-flow}
+    expect: {status: 404, body: {error: not found}, exact: true}
+
   - name: property routes are gone when property is disabled
     as: owner
     request: {method: GET, path: /api/v1/orgs/acme/properties}
