@@ -60,7 +60,7 @@ describe('[org] dashboard page empty/settled state', () => {
 
 		render(Page);
 
-		expect(await screen.findByText('Open invoices')).toBeTruthy();
+		expect(await screen.findByRole('heading', { name: 'Total Receivables' })).toBeTruthy();
 		expect(screen.queryByText('No invoices yet — create one')).toBeNull();
 	});
 
@@ -83,7 +83,7 @@ describe('[org] dashboard page empty/settled state', () => {
 
 		const card = await screen.findByRole('link', { name: /reconciliation/i });
 		expect(card.getAttribute('href')).toBe('/acme/reconciliation');
-		expect(screen.getByRole('link', { name: /open invoices/i }).getAttribute('href')).toBe(
+		expect(screen.getByRole('link', { name: /current/i }).getAttribute('href')).toBe(
 			'/acme/invoices?status=open'
 		);
 	});
