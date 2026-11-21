@@ -1,7 +1,7 @@
 # S3 file storage with SeaweedFS — design
 
 Date: 2026-11-21
-Status: draft
+Status: approved
 
 ## Intent
 
@@ -23,7 +23,8 @@ extra service.
   SeaweedFS, Cloudflare R2 and other S3-compatible stores.
 - Backend chosen by configuration; disk remains available.
 - SeaweedFS deployed by the `shigoto` Ansible role, internal-network only.
-- A one-off command that copies every existing blob into S3 and verifies it.
+- A one-off, manually run script that copies the existing blobs into S3 and
+  verifies them. Not part of the shipped app.
 - Weekly cold backups keep pairing the file store with the PostgreSQL dump.
 - Production on ERP2 runs the S3 backend; the old files directory is deleted
   after a verified migration and a successful backup.
@@ -174,20 +175,27 @@ Local dev: `docker-compose.yml` gains a `storage` service (SeaweedFS,
 same pinned image as production) with the S3 port on `127.0.0.1` only; the
 `test-integration` task starts it and exports the S3 test variables.
 
-### 4. Migration command
+### 4. Migration script (one-off, not persisted in the app)
 
-`shigoto storage migrate --from-dir <dir>` (new subcommand in
-`cmd/shigoto`) runs against the configured S3 store:
+Production holds two or three files and downtime is unconstrained, so there
+is no migration subcommand or app code. The cutover runbook (role README)
+carries a short shell script the operator runs by hand on ERP2 with the app
+stopped. It uses a throwaway S3 client container (e.g. the AWS CLI image)
+attached to the `shigoto` network with the vault-sourced keys:
 
-1. For every `files` row, read `<dir>/<org>/<hex>`, upload it to the S3
-   key (skipping objects already present with the right size, so reruns are
-   cheap and resumable).
-2. Verify every row: object exists, size matches `size_bytes`, and the
-   SHA-256 of the object read back from S3 matches `sha256`.
-3. Print counts (copied, already present, verified) and exit non-zero on
-   any missing source file or mismatch, listing the offending file ids.
+1. Copy `/opt/homelab/shigoto/files/<org>/<hex>` to
+   `s3://<bucket>/<prefix><org>/<hex>` (skipping `.upload-*` temp files).
+   The disk layout already equals the S3 key layout, so this is a straight
+   recursive copy.
+2. Verify: for each `files` row (`SELECT org_id, encode(sha256,'hex'),
+   size_bytes FROM files` via `docker exec shigoto_db psql`), the object
+   exists, its size matches, and the SHA-256 of the downloaded bytes equals
+   the hex key.
+3. Exit non-zero and print offending keys on any mismatch or missing
+   object; otherwise print the verified count.
 
-Blobs on disk with no `files` row are reported, not copied.
+The script lives only in the runbook. It is not committed as an executable
+and has no tests.
 
 ### 5. Ansible (`ansible/roles/shigoto`)
 
@@ -233,8 +241,7 @@ storage then app, spot-check a download.
 1. Deploy with `shigoto_storage_backend: disk` and SeaweedFS present (new
    image, storage service running, app still on disk). Backup paths include
    both locations.
-2. Stop the app; run `storage migrate` as a one-off container with S3
-   config and the old files directory mounted read-only. Must exit 0.
+2. Stop the app; run the §4 migration script. Must exit 0.
 3. Set `shigoto_storage_backend: s3`; deploy; check, then re-check reports
    no unexpected changes. Spot-check document download and video seek.
 4. Run a backup and confirm it succeeded with the SeaweedFS directory.
@@ -259,6 +266,7 @@ storage then app, spot-check a download.
   server (instead of failing immediately or changing the shared backups
   role).
 - Staging cleanup by app scheduler, not bucket lifecycle rules.
-- Migration skips already-present objects so it can be rerun.
-- Orphan disk blobs are reported, not migrated.
+- Migration is a runbook shell script using a throwaway AWS CLI
+  container, verified against the `files` table; orphan disk blobs are
+  copied too (harmless at this size).
 - Production key layout mirrors disk (`<org>/<hex>`).
