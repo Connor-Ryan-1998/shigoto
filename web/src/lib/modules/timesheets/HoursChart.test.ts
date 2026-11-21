@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/svelte';
+import { fireEvent, render, screen } from '@testing-library/svelte';
 import HoursChart from './HoursChart.svelte';
 import type { Entry } from './types';
 
@@ -23,5 +23,24 @@ describe('HoursChart', () => {
 		expect(items[0]).toContain('01:00 billed, 00:30 unbilled, 00:00 fixed fee');
 		expect(items[6]).toContain('00:00 billed, 00:00 unbilled, 00:45 fixed fee');
 		expect(items.slice(1, 6).every((t) => t?.includes('00:00 billed, 00:00 unbilled, 00:00 fixed fee'))).toBe(true);
+	});
+
+	it('is not a <figure>, which DaisyUI cards lay out as a centred row', () => {
+		const { container } = render(HoursChart, { today: '2026-11-08', entries: [] });
+		expect(container.querySelector('figure')).toBeNull();
+		expect(screen.getByRole('figure', { name: /hours/i })).toBeTruthy();
+	});
+
+	it('steps between weeks and cannot go past the current week', async () => {
+		render(HoursChart, { today: '2026-11-21', entries: [entry('2026-11-10', 90)] });
+		expect(screen.getByText('No time logged this week.')).toBeTruthy();
+		expect((screen.getByRole('button', { name: /next week/i }) as HTMLButtonElement).disabled).toBe(true);
+
+		await fireEvent.click(screen.getByRole('button', { name: /previous week/i }));
+		expect(screen.queryByText('No time logged this week.')).toBeNull();
+		expect(screen.getAllByRole('listitem')[1].textContent).toContain('00:00 billed, 01:30 unbilled');
+
+		await fireEvent.click(screen.getByRole('button', { name: /current week/i }));
+		expect(screen.getByText('No time logged this week.')).toBeTruthy();
 	});
 });
