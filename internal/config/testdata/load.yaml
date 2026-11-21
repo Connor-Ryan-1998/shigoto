@@ -15,6 +15,7 @@
     oidc_configured: false
     upload_max_bytes: 1073741824
     upload_min_free_bytes: 5368709120
+    storage: disk
 
 - name: unknown module rejected
   env: {SHIGOTO_MODULES: "property,payroll"}
@@ -124,3 +125,59 @@
 - name: upload min free negative rejected
   env: {SHIGOTO_UPLOAD_MIN_FREE_BYTES: "-5"}
   err: SHIGOTO_UPLOAD_MIN_FREE_BYTES
+
+- name: storage s3 full
+  env: {SHIGOTO_STORAGE: s3, SHIGOTO_S3_ENDPOINT: "http://storage:8333", SHIGOTO_S3_BUCKET: shigoto, SHIGOTO_S3_ACCESS_KEY_ID: k, SHIGOTO_S3_SECRET_ACCESS_KEY: s}
+  want:
+    storage: s3
+    s3_endpoint: "http://storage:8333"
+    s3_region: auto
+    s3_bucket: shigoto
+    s3_path_style: true
+    s3_prefix: ""
+
+- name: storage s3 overrides
+  env: {SHIGOTO_STORAGE: s3, SHIGOTO_S3_ENDPOINT: "http://storage:8333", SHIGOTO_S3_BUCKET: shigoto, SHIGOTO_S3_ACCESS_KEY_ID: k, SHIGOTO_S3_SECRET_ACCESS_KEY: s, SHIGOTO_S3_REGION: ap-sydney-1, SHIGOTO_S3_PATH_STYLE: "false", SHIGOTO_S3_PREFIX: prod}
+  want:
+    storage: s3
+    s3_region: ap-sydney-1
+    s3_path_style: false
+    s3_prefix: prod/
+
+- name: storage s3 prefix keeps trailing slash
+  env: {SHIGOTO_STORAGE: s3, SHIGOTO_S3_ENDPOINT: "http://storage:8333", SHIGOTO_S3_BUCKET: shigoto, SHIGOTO_S3_ACCESS_KEY_ID: k, SHIGOTO_S3_SECRET_ACCESS_KEY: s, SHIGOTO_S3_PREFIX: prod/}
+  want:
+    s3_prefix: prod/
+
+- name: unknown storage rejected
+  env: {SHIGOTO_STORAGE: gcs}
+  err: SHIGOTO_STORAGE
+
+- name: s3 endpoint required
+  env: {SHIGOTO_STORAGE: s3, SHIGOTO_S3_ENDPOINT: "", SHIGOTO_S3_BUCKET: shigoto, SHIGOTO_S3_ACCESS_KEY_ID: k, SHIGOTO_S3_SECRET_ACCESS_KEY: s}
+  err: SHIGOTO_S3_ENDPOINT
+
+- name: s3 bucket required
+  env: {SHIGOTO_STORAGE: s3, SHIGOTO_S3_ENDPOINT: "http://storage:8333", SHIGOTO_S3_BUCKET: "", SHIGOTO_S3_ACCESS_KEY_ID: k, SHIGOTO_S3_SECRET_ACCESS_KEY: s}
+  err: SHIGOTO_S3_BUCKET
+
+- name: s3 access key required
+  env: {SHIGOTO_STORAGE: s3, SHIGOTO_S3_ENDPOINT: "http://storage:8333", SHIGOTO_S3_BUCKET: shigoto, SHIGOTO_S3_ACCESS_KEY_ID: "", SHIGOTO_S3_SECRET_ACCESS_KEY: s}
+  err: SHIGOTO_S3_ACCESS_KEY_ID
+
+- name: s3 secret key required
+  env: {SHIGOTO_STORAGE: s3, SHIGOTO_S3_ENDPOINT: "http://storage:8333", SHIGOTO_S3_BUCKET: shigoto, SHIGOTO_S3_ACCESS_KEY_ID: k, SHIGOTO_S3_SECRET_ACCESS_KEY: ""}
+  err: SHIGOTO_S3_SECRET_ACCESS_KEY
+
+- name: s3 endpoint must be absolute URL
+  env: {SHIGOTO_STORAGE: s3, SHIGOTO_S3_ENDPOINT: "storage:8333", SHIGOTO_S3_BUCKET: shigoto, SHIGOTO_S3_ACCESS_KEY_ID: k, SHIGOTO_S3_SECRET_ACCESS_KEY: s}
+  err: SHIGOTO_S3_ENDPOINT
+
+- name: s3 path style must be boolean
+  env: {SHIGOTO_STORAGE: s3, SHIGOTO_S3_ENDPOINT: "http://storage:8333", SHIGOTO_S3_BUCKET: shigoto, SHIGOTO_S3_ACCESS_KEY_ID: k, SHIGOTO_S3_SECRET_ACCESS_KEY: s, SHIGOTO_S3_PATH_STYLE: maybe}
+  err: SHIGOTO_S3_PATH_STYLE
+
+- name: disk ignores s3 vars
+  env: {SHIGOTO_S3_ENDPOINT: nonsense}
+  want:
+    storage: disk

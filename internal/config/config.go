@@ -42,6 +42,26 @@ type SMTP struct {
 	TLS string
 }
 
+// S3 holds the S3-compatible object store settings used when
+// Config.Storage is "s3".
+type S3 struct {
+	// Endpoint is the absolute http(s) URL of the S3 API
+	// (SHIGOTO_S3_ENDPOINT).
+	Endpoint string
+	// Region is passed to request signing (SHIGOTO_S3_REGION, default
+	// "auto", which Cloudflare R2 expects).
+	Region          string
+	Bucket          string
+	AccessKeyID     string
+	SecretAccessKey string
+	// PathStyle selects path-style addressing (SHIGOTO_S3_PATH_STYLE,
+	// default true; SeaweedFS needs it).
+	PathStyle bool
+	// Prefix is prepended to every object key (SHIGOTO_S3_PREFIX), always
+	// ending in "/" when set, so one bucket can host several apps.
+	Prefix string
+}
+
 // Config is shigoto's runtime configuration.
 type Config struct {
 	Listen      string
@@ -49,6 +69,11 @@ type Config struct {
 	Modules     map[string]bool
 	FilesDir    string
 	BaseURL     string
+	// Storage selects the file store: "disk" (SHIGOTO_STORAGE default,
+	// under FilesDir) or "s3" (S3).
+	Storage string
+	// S3 is the object store configuration; zero unless Storage is "s3".
+	S3 S3
 	// UploadMaxBytes caps a maintenance media upload
 	// (SHIGOTO_UPLOAD_MAX_BYTES, default 1 GiB; 0 = unlimited). Document
 	// uploads keep their own fixed 10 MiB cap.
@@ -90,6 +115,9 @@ func Load(getenv func(string) string) (Config, error) {
 	}
 
 	var err error
+	if c.Storage, c.S3, err = loadStorage(getenv); err != nil {
+		return Config{}, err
+	}
 	if c.UploadMaxBytes, err = nonNegativeBytes(getenv, "SHIGOTO_UPLOAD_MAX_BYTES", 1<<30); err != nil {
 		return Config{}, err
 	}
@@ -180,6 +208,56 @@ func Load(getenv func(string) string) (Config, error) {
 	}
 
 	return c, nil
+}
+
+// loadStorage reads SHIGOTO_STORAGE and, for "s3", the SHIGOTO_S3_*
+// variables. S3 variables are ignored for the disk backend.
+func loadStorage(getenv func(string) string) (string, S3, error) {
+	backend := getenv("SHIGOTO_STORAGE")
+	switch backend {
+	case "", "disk":
+		return "disk", S3{}, nil
+	case "s3":
+	default:
+		return "", S3{}, fmt.Errorf("invalid SHIGOTO_STORAGE %q (want \"disk\" or \"s3\")", backend)
+	}
+
+	s := S3{
+		Endpoint:        getenv("SHIGOTO_S3_ENDPOINT"),
+		Region:          getenv("SHIGOTO_S3_REGION"),
+		Bucket:          getenv("SHIGOTO_S3_BUCKET"),
+		AccessKeyID:     getenv("SHIGOTO_S3_ACCESS_KEY_ID"),
+		SecretAccessKey: getenv("SHIGOTO_S3_SECRET_ACCESS_KEY"),
+		Prefix:          getenv("SHIGOTO_S3_PREFIX"),
+		PathStyle:       true,
+	}
+	for _, req := range []struct{ name, value string }{
+		{"SHIGOTO_S3_ENDPOINT", s.Endpoint},
+		{"SHIGOTO_S3_BUCKET", s.Bucket},
+		{"SHIGOTO_S3_ACCESS_KEY_ID", s.AccessKeyID},
+		{"SHIGOTO_S3_SECRET_ACCESS_KEY", s.SecretAccessKey},
+	} {
+		if req.value == "" {
+			return "", S3{}, fmt.Errorf("%s is required when SHIGOTO_STORAGE=s3", req.name)
+		}
+	}
+	if u, err := url.Parse(s.Endpoint); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return "", S3{}, fmt.Errorf("SHIGOTO_S3_ENDPOINT must be an absolute http:// or https:// URL, got %q", s.Endpoint)
+	}
+	if s.Region == "" {
+		s.Region = "auto"
+	}
+	if v := getenv("SHIGOTO_S3_PATH_STYLE"); v != "" {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return "", S3{}, fmt.Errorf("invalid SHIGOTO_S3_PATH_STYLE %q (want true or false)", v)
+		}
+		s.PathStyle = b
+	}
+	if s.Prefix != "" && !strings.HasSuffix(s.Prefix, "/") {
+		s.Prefix += "/"
+	}
+	return "s3", s, nil
 }
 
 // loopbackSMTPHosts are the only hosts SHIGOTO_SMTP_TLS=none is accepted

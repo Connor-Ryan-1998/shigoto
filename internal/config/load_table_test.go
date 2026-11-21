@@ -31,6 +31,12 @@ type loadWant struct {
 	OIDCScopes     []string `yaml:"oidc_scopes"`
 	UploadMax      *int64   `yaml:"upload_max_bytes"`
 	UploadMinFree  *int64   `yaml:"upload_min_free_bytes"`
+	Storage        *string  `yaml:"storage"`
+	S3Endpoint     *string  `yaml:"s3_endpoint"`
+	S3Region       *string  `yaml:"s3_region"`
+	S3Bucket       *string  `yaml:"s3_bucket"`
+	S3PathStyle    *bool    `yaml:"s3_path_style"`
+	S3Prefix       *string  `yaml:"s3_prefix"`
 }
 
 func TestLoadTable(t *testing.T) {
@@ -121,6 +127,24 @@ func (w *loadWant) check(t *testing.T, label string, c Config) {
 	}
 	if w.UploadMinFree != nil {
 		eq("UploadMinFreeBytes", c.UploadMinFreeBytes, *w.UploadMinFree)
+	}
+	if w.Storage != nil {
+		eq("Storage", c.Storage, *w.Storage)
+	}
+	if w.S3Endpoint != nil {
+		eq("S3.Endpoint", c.S3.Endpoint, *w.S3Endpoint)
+	}
+	if w.S3Region != nil {
+		eq("S3.Region", c.S3.Region, *w.S3Region)
+	}
+	if w.S3Bucket != nil {
+		eq("S3.Bucket", c.S3.Bucket, *w.S3Bucket)
+	}
+	if w.S3PathStyle != nil {
+		eq("S3.PathStyle", c.S3.PathStyle, *w.S3PathStyle)
+	}
+	if w.S3Prefix != nil {
+		eq("S3.Prefix", c.S3.Prefix, *w.S3Prefix)
 	}
 	if w.OIDCScopes != nil {
 		if c.OIDC == nil || !slices.Equal(c.OIDC.Scopes, w.OIDCScopes) {
