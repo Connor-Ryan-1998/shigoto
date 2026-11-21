@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"sort"
 	"strconv"
 	"time"
 
@@ -52,79 +53,78 @@ func Module() module.Module {
 
 // timesheetsDashboard is the timesheets module's dashboard section.
 type timesheetsDashboard struct {
-	UnbilledMinutes  int   `json:"unbilled_minutes"`
-	UnbilledEstimate int64 `json:"unbilled_estimate"`
+	UnbilledMinutes  int                `json:"unbilled_minutes"`
+	UnbilledEstimate int64              `json:"unbilled_estimate"`
+	Projects         []dashboardProject `json:"projects"`
+	ProjectCount     int                `json:"project_count"`
 }
 
-// dashboardSection builds the timesheets module's dashboard section: every
-// unbilled time entry's minutes, and their billing estimate computed the
-// same way LineFor would (DivRound(minutes*effective_rate, 60) per task),
-// so the estimate never drifts from what a real billing run would charge.
-//
-// ponytail: one query groups every unbilled entry by task (bounded by
-// distinct unbilled tasks, not entry count), then GetTask/GetProject is
-// called once per distinct task (and once per distinct project, cached) to
-// get its effective rate - reusing lockUnbilledEntries' own task/project
-// lookup pattern rather than duplicating EffectiveRate's logic in SQL.
-// Fine while unbilled tasks stay in the dozens/hundreds; move the rate
-// lookup into the grouping query (a join) if that ever grows large.
+type dashboardProject struct {
+	ID              int64  `json:"id"`
+	Name            string `json:"name"`
+	ClientName      string `json:"client_name"`
+	BilledMinutes   int    `json:"billed_minutes"`
+	UnbilledMinutes int    `json:"unbilled_minutes"`
+}
+
+// Round estimates per task, like LineFor; project rings count all logged
+// time, including time on draft invoices and archived tasks.
 func dashboardSection(ctx context.Context, q core.Querier, orgID int64, today time.Time) (any, error) {
 	rows, err := q.Query(ctx, `
-		SELECT task_id, sum(minutes) FROM time_entries
-		WHERE org_id = $1 AND invoice_line_id IS NULL
-		GROUP BY task_id`,
+		SELECT p.id, p.name, c.name, coalesce(t.hourly_rate, p.hourly_rate),
+			coalesce(sum(e.minutes) FILTER (WHERE e.invoice_line_id IS NOT NULL), 0),
+			coalesce(sum(e.minutes) FILTER (WHERE e.invoice_line_id IS NULL), 0)
+		FROM time_entries e
+		JOIN project_tasks t ON t.id = e.task_id AND t.org_id = e.org_id
+		JOIN projects p ON p.id = t.project_id AND p.org_id = t.org_id
+		JOIN contacts c ON c.id = p.client_contact_id AND c.org_id = p.org_id
+		WHERE e.org_id = $1 AND p.active AND p.billing_method <> 'fixed'
+		GROUP BY p.id, c.id, t.id`,
 		orgID,
 	)
 	if err != nil {
 		return nil, err
 	}
-	type taskMinutes struct {
-		taskID  int64
-		minutes int
-	}
-	var groups []taskMinutes
+	defer rows.Close()
+	result := timesheetsDashboard{Projects: []dashboardProject{}}
+	projects := map[int64]*dashboardProject{}
 	for rows.Next() {
-		var g taskMinutes
-		if err := rows.Scan(&g.taskID, &g.minutes); err != nil {
-			rows.Close()
+		var p dashboardProject
+		var rate int64
+		if err := rows.Scan(&p.ID, &p.Name, &p.ClientName, &rate, &p.BilledMinutes, &p.UnbilledMinutes); err != nil {
 			return nil, err
 		}
-		groups = append(groups, g)
+		project := projects[p.ID]
+		if project == nil {
+			project = &dashboardProject{ID: p.ID, Name: p.Name, ClientName: p.ClientName}
+			projects[p.ID] = project
+		}
+		project.BilledMinutes += p.BilledMinutes
+		project.UnbilledMinutes += p.UnbilledMinutes
+		result.UnbilledMinutes += p.UnbilledMinutes
+		result.UnbilledEstimate += core.DivRound(int64(p.UnbilledMinutes)*rate, 60)
 	}
-	rows.Close()
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
 
-	projects := map[int64]Project{}
-	var unbilledMinutes int
-	var unbilledEstimate core.Cents
-	for _, g := range groups {
-		task, err := GetTask(ctx, q, orgID, g.taskID)
-		if err != nil {
-			return nil, err
+	for _, project := range projects {
+		if project.UnbilledMinutes > 0 {
+			result.Projects = append(result.Projects, *project)
 		}
-		project, ok := projects[task.ProjectID]
-		if !ok {
-			project, err = GetProject(ctx, q, orgID, task.ProjectID)
-			if err != nil {
-				return nil, err
-			}
-			projects[task.ProjectID] = project
-		}
-		// Fixed-price time is never billed by the billing run, so it
-		// isn't unbilled revenue.
-		if project.BillingMethod == BillingFixed {
-			continue
-		}
-		unbilledMinutes += g.minutes
-		unbilledEstimate += core.Cents(core.DivRound(int64(g.minutes)*int64(task.EffectiveRate(project)), 60))
 	}
-
-	return timesheetsDashboard{
-		UnbilledMinutes:  unbilledMinutes,
-		UnbilledEstimate: int64(unbilledEstimate),
-	}, nil
+	sort.Slice(result.Projects, func(i, j int) bool {
+		a, b := result.Projects[i], result.Projects[j]
+		if a.UnbilledMinutes == b.UnbilledMinutes {
+			return a.ID < b.ID
+		}
+		return a.UnbilledMinutes > b.UnbilledMinutes
+	})
+	result.ProjectCount = len(result.Projects)
+	if len(result.Projects) > 5 {
+		result.Projects = result.Projects[:5]
+	}
+	return result, nil
 }
 
 func registerRoutes(mux *http.ServeMux, d module.Deps) {
