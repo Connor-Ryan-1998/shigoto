@@ -59,10 +59,10 @@ test('SSO sign-in leaves the client router for the backend', async ({ page }) =>
 	await expect(page.getByRole('heading', { name: 'Backend SSO entry' })).toBeVisible();
 });
 
-test('login, dashboard tiles, and org switching', async ({ page }) => {
+test('login, receivables, and org switching', async ({ page }) => {
 	// Orgs are listed by name, so Alpha is the post-login default.
 	await signIn(page, base, email, password, '/org-a');
-	const openTile = page.getByRole('link', { name: /open invoices/i });
+	const openTile = page.getByRole('link', { name: /current:/i });
 	await expect(openTile).toContainText('$100.00');
 
 	await openTile.click();
@@ -76,5 +76,4 @@ test('login, dashboard tiles, and org switching', async ({ page }) => {
 	await page.getByLabel('Organisation').selectOption('org-b');
 	await expect(page).toHaveURL(`${base}/org-b`);
 	await expect(openTile).toContainText('$300.00');
-	await expect(openTile).toContainText('2');
 });

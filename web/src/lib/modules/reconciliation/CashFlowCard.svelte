@@ -24,6 +24,7 @@
 	const monthFormat = new Intl.DateTimeFormat('en-AU', { month: 'short', timeZone: 'UTC' });
 	const monthLabel = (month: string) => monthFormat.format(new Date(`${month}T00:00:00Z`));
 	const headingId = $props.id();
+	const tickLabelProps = { class: 'fill-base-content stroke-none text-xs font-normal' };
 	const series = [
 		{ key: 'incoming', label: 'Incoming', color: 'var(--color-success)' },
 		{ key: 'outgoing', label: 'Outgoing', color: 'var(--color-error)' }
@@ -85,8 +86,9 @@
 							height={288}
 							padding={{ left: 64, right: 8, top: 8, bottom: 28 }}
 							props={{
-								xAxis: { format: monthLabel, tickSpacing: 40, tickOcclusion: true },
-								yAxis: { format: money, ticks: 4 },
+								bars: { strokeWidth: 0 },
+								xAxis: { format: monthLabel, tickSpacing: 40, tickOcclusion: true, tickLabelProps },
+								yAxis: { format: money, ticks: 4, tickLabelProps },
 								tooltip: { item: { format: money }, header: { format: date }, hideTotal: true,
 									root: { class: 'border border-base-300 bg-base-100 text-base-content shadow-sm' } }
 							}}
