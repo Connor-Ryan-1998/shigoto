@@ -148,6 +148,29 @@ func runContract(t *testing.T, newStore func(t *testing.T) storage.Store) {
 		}
 	})
 
+	// The upload handler commits the blob after its database transaction
+	// commits; a client that disconnects at that moment cancels the request
+	// context, but the bytes must still land or the saved row has no blob.
+	t.Run("CommitWithCancelledContextStores", func(t *testing.T) {
+		s := newStore(t)
+		k := key(1, "late")
+		p, err := s.Begin(ctx, 1)
+		if err != nil {
+			t.Fatalf("Begin: %v", err)
+		}
+		if _, err := io.WriteString(p, "late"); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+		cancelled, cancel := context.WithCancel(ctx)
+		cancel()
+		if err := p.Commit(cancelled, k); err != nil {
+			t.Fatalf("Commit with cancelled context: %v", err)
+		}
+		if got, _ := readAll(t, s, k); got != "late" {
+			t.Fatalf("got %q", got)
+		}
+	})
+
 	t.Run("OrgIsolation", func(t *testing.T) {
 		s := newStore(t)
 		k := key(1, "mine")

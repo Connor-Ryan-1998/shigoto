@@ -228,6 +228,11 @@ func (p *s3Pending) Commit(ctx context.Context, k Key) error {
 	}
 	p.done = true
 	dest := p.s.objectKey(k)
+	// Callers commit after the files row is saved; a client disconnecting
+	// now cancels ctx, but abandoning the store calls would leave that row
+	// without bytes. Finish regardless (the disk backend's rename does too).
+	ctx = context.WithoutCancel(ctx)
+	p.ctx = ctx // the final part flush below must survive it too
 
 	exists, err := p.s.exists(ctx, dest)
 	if err != nil {

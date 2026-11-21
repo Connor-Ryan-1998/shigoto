@@ -384,3 +384,31 @@ func TestS3PruneStaging(t *testing.T) {
 		t.Fatalf("committed blob changed: %q", got)
 	}
 }
+
+func TestS3MultipartCommitWithCancelledContextStores(t *testing.T) {
+	defer storage.SetUploadPartSize(5 << 20)()
+	defer storage.SetCopyLimits(5<<20, 5<<20)()
+	s := newTestS3(t)
+	data := randomBytes(t, 12<<20)
+	k := keyFor(1, data)
+	// One request context for the whole upload, as in HandleUpload; the
+	// client goes away after the body is read but before Commit.
+	reqCtx, cancel := context.WithCancel(context.Background())
+	p, err := s.Begin(reqCtx, 1)
+	if err != nil {
+		t.Fatalf("Begin: %v", err)
+	}
+	if _, err := p.Write(data); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	cancel()
+	if err := p.Commit(reqCtx, k); err != nil {
+		t.Fatalf("Commit with cancelled context: %v", err)
+	}
+	if got := sha256.Sum256(rawObject(t, s, k)); !bytes.Equal(got[:], k.SHA256) {
+		t.Fatal("stored object does not match uploaded bytes")
+	}
+	if left := stagingLeft(t, s); len(left) != 0 {
+		t.Fatalf("staging left: %v", left)
+	}
+}
