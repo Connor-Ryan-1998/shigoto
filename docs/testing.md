@@ -34,7 +34,11 @@ edge cases.
 ## Go
 
 Run with `task test` (unit) and `task test SUITE=integration` (needs compose
-Postgres).
+Postgres and SeaweedFS). S3 storage tests skip unless
+`SHIGOTO_TEST_S3_ENDPOINT` is set; the integration task starts the compose
+`storage` service and points it at `http://localhost:8333`. The storage
+backend contract (`internal/storage/contract_test.go`) runs against disk in
+the unit suite and against S3 in the integration suite.
 
 ### HTTP cases (`internal/httpapi/testdata/cases/*.yaml`)
 

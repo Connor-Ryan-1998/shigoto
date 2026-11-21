@@ -27,6 +27,21 @@ services:
       timeout: 5s
       retries: 10
 
+  storage:
+    # Same digest-pinned release as ansible/roles/shigoto/defaults/main.yml.
+    # No -s3.config: anonymous access is fine for local dev and tests.
+    image: chrislusf/seaweedfs:4.54@sha256:4b42c212543a0acd4c0e675215ecdcaf62a186ef98def76c7e12701871222d15
+    command: ["server", "-s3", "-ip.bind=0.0.0.0"]
+    ports:
+      - "127.0.0.1:8333:8333"
+    volumes:
+      - seaweedfs:/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8333/healthz"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
   app:
     build: .
     depends_on:
@@ -49,3 +64,4 @@ services:
 volumes:
   pgdata:
   files:
+  seaweedfs:
