@@ -28,7 +28,6 @@ import (
 	"shigoto/internal/db"
 	"shigoto/internal/httpapi"
 	"shigoto/internal/scheduler"
-	"shigoto/internal/storage"
 )
 
 func main() {
@@ -214,7 +213,10 @@ func serve() error {
 		}))
 	}
 	a := auth.New(pool, strings.HasPrefix(cfg.BaseURL, "https://"), authOpts...)
-	store := storage.NewDisk(cfg.FilesDir)
+	store, err := openStore(ctx, cfg)
+	if err != nil {
+		return fmt.Errorf("opening file store: %w", err)
+	}
 	deps := httpapi.Deps{Pool: pool, Auth: a, Cfg: cfg, Store: store}
 	billingSvc := httpapi.DefaultBilling(deps)
 	deps.Billing = billingSvc
