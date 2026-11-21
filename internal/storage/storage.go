@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"time"
 )
 
 // ErrNotFound is returned by Open when no blob exists for a key.
@@ -44,4 +45,12 @@ type Store interface {
 	Delete(ctx context.Context, key Key) error
 	// FreeBytes reports remaining capacity, or -1 when unknown/unlimited.
 	FreeBytes(ctx context.Context) (int64, error)
+}
+
+// StagingPruner is implemented by stores whose abandoned staged writes
+// (from a crash between Begin and Commit/Abort) need explicit clean-up.
+type StagingPruner interface {
+	// PruneStaging removes staged writes started before before. Committed
+	// blobs are never touched.
+	PruneStaging(ctx context.Context, before time.Time) error
 }

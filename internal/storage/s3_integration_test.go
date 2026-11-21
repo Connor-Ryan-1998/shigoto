@@ -17,6 +17,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -334,5 +335,42 @@ func TestS3BlobNegativeSeekErrors(t *testing.T) {
 	b, _ := openHelloWorld(t)
 	if _, err := b.Seek(-1, io.SeekStart); err == nil {
 		t.Fatal("Seek(-1, Start) succeeded")
+	}
+}
+
+func TestS3PruneStaging(t *testing.T) {
+	ctx := context.Background()
+	s := newTestS3(t)
+	c, bucket := s.RawClient(), s.BucketName()
+
+	kept := []byte("committed")
+	k := keyFor(1, kept)
+	commitBytes(t, s, k, kept)
+
+	staged := s.KeyPrefix() + "staging/1/abandoned"
+	if _, err := c.PutObject(ctx, &s3.PutObjectInput{Bucket: &bucket, Key: &staged, Body: bytes.NewReader([]byte("x"))}); err != nil {
+		t.Fatalf("PutObject: %v", err)
+	}
+	inflight := s.KeyPrefix() + "staging/1/inflight"
+	if _, err := c.CreateMultipartUpload(ctx, &s3.CreateMultipartUploadInput{Bucket: &bucket, Key: &inflight}); err != nil {
+		t.Fatalf("CreateMultipartUpload: %v", err)
+	}
+
+	var pruner storage.StagingPruner = s
+	if err := pruner.PruneStaging(ctx, time.Now().Add(-time.Hour)); err != nil {
+		t.Fatalf("PruneStaging (old cutoff): %v", err)
+	}
+	if left := stagingLeft(t, s); len(left) != 2 {
+		t.Fatalf("fresh staging pruned early: left %v", left)
+	}
+
+	if err := pruner.PruneStaging(ctx, time.Now().Add(time.Minute)); err != nil {
+		t.Fatalf("PruneStaging: %v", err)
+	}
+	if left := stagingLeft(t, s); len(left) != 0 {
+		t.Fatalf("staging left after prune: %v", left)
+	}
+	if got := rawObject(t, s, k); !bytes.Equal(got, kept) {
+		t.Fatalf("committed blob changed: %q", got)
 	}
 }

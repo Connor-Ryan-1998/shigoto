@@ -22,6 +22,10 @@ import (
 // them does the work for a given tick.
 const lockID = 7414
 
+// stagingTTL is how old an abandoned staged upload must be before the
+// store's PruneStaging removes it.
+const stagingTTL = 24 * time.Hour
+
 // Jobs holds the scheduler's dependencies.
 type Jobs struct {
 	Pool    *pgxpool.Pool
@@ -110,6 +114,11 @@ func (j Jobs) Tick(ctx context.Context, now time.Time) error {
 	if j.Store != nil {
 		if err := property.PrunePendingFiles(ctx, j.Pool, j.Store, now); err != nil {
 			slog.Error("pruning pending uploads failed", "error", err)
+		}
+		if pruner, ok := j.Store.(storage.StagingPruner); ok {
+			if err := pruner.PruneStaging(ctx, now.Add(-stagingTTL)); err != nil {
+				slog.Error("pruning staged uploads failed", "error", err)
+			}
 		}
 	}
 	if err := auth.PruneSessions(ctx, j.Pool, now); err != nil {

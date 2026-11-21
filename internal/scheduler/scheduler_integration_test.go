@@ -4,6 +4,7 @@ package scheduler
 
 import (
 	"bytes"
+	"context"
 	"testing"
 	"time"
 
@@ -140,5 +141,29 @@ func TestTickPrunesExpiredPendingUploads(t *testing.T) {
 	}
 	if n := e.Count("files", "id = $1", f.ID); n != 0 {
 		t.Fatalf("expired upload kept")
+	}
+}
+
+// recordingPruner is a disk store that also records PruneStaging calls.
+type recordingPruner struct {
+	*storage.Disk
+	before []time.Time
+}
+
+func (r *recordingPruner) PruneStaging(_ context.Context, before time.Time) error {
+	r.before = append(r.before, before)
+	return nil
+}
+
+func TestTickPrunesStaging(t *testing.T) {
+	e := testkit.New(t)
+	store := &recordingPruner{Disk: storage.NewDisk(t.TempDir())}
+	now := time.Date(2026, 11, 21, 12, 0, 0, 0, time.UTC)
+	j := Jobs{Pool: e.Pool, Billing: e.BillingService(), Location: time.UTC, Store: store}
+	if err := j.Tick(e.Ctx, now); err != nil {
+		t.Fatalf("Tick: %v", err)
+	}
+	if len(store.before) != 1 || !store.before[0].Equal(now.Add(-24*time.Hour)) {
+		t.Fatalf("PruneStaging cutoffs = %v, want [%v]", store.before, now.Add(-24*time.Hour))
 	}
 }

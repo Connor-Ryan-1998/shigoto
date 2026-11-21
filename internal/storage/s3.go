@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
@@ -429,6 +430,54 @@ func (s *S3) Delete(ctx context.Context, k Key) error {
 		return fmt.Errorf("storage: deleting %s: %w", key, err)
 	}
 	return nil
+}
+
+// PruneStaging deletes staging objects last modified before before and
+// aborts multipart uploads under the staging prefix initiated before it.
+func (s *S3) PruneStaging(ctx context.Context, before time.Time) error {
+	prefix := s.prefix + "staging/"
+	var errs []error
+
+	objects := s3.NewListObjectsV2Paginator(s.client, &s3.ListObjectsV2Input{Bucket: &s.bucket, Prefix: &prefix})
+	for objects.HasMorePages() {
+		page, err := objects.NextPage(ctx)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("storage: listing staging: %w", err))
+			break
+		}
+		for _, o := range page.Contents {
+			if o.LastModified == nil || !o.LastModified.Before(before) {
+				continue
+			}
+			if _, err := s.client.DeleteObject(ctx, &s3.DeleteObjectInput{Bucket: &s.bucket, Key: o.Key}); err != nil && !isNotFound(err) {
+				errs = append(errs, fmt.Errorf("storage: deleting %s: %w", aws.ToString(o.Key), err))
+			}
+		}
+	}
+
+	var keyMarker, idMarker *string
+	for {
+		page, err := s.client.ListMultipartUploads(ctx, &s3.ListMultipartUploadsInput{
+			Bucket: &s.bucket, Prefix: &prefix, KeyMarker: keyMarker, UploadIdMarker: idMarker,
+		})
+		if err != nil {
+			errs = append(errs, fmt.Errorf("storage: listing staged uploads: %w", err))
+			break
+		}
+		for _, u := range page.Uploads {
+			if u.Initiated == nil || !u.Initiated.Before(before) {
+				continue
+			}
+			if _, err := s.client.AbortMultipartUpload(ctx, &s3.AbortMultipartUploadInput{Bucket: &s.bucket, Key: u.Key, UploadId: u.UploadId}); err != nil && !isNotFound(err) {
+				errs = append(errs, fmt.Errorf("storage: aborting upload of %s: %w", aws.ToString(u.Key), err))
+			}
+		}
+		if !aws.ToBool(page.IsTruncated) {
+			break
+		}
+		keyMarker, idMarker = page.NextKeyMarker, page.NextUploadIdMarker
+	}
+	return errors.Join(errs...)
 }
 
 // FreeBytes is unknown for object storage.
