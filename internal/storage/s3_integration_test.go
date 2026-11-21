@@ -10,9 +10,12 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"regexp"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -225,5 +228,111 @@ func TestS3FreeBytesUnknown(t *testing.T) {
 	s := newTestS3(t)
 	if free, err := s.FreeBytes(context.Background()); err != nil || free != -1 {
 		t.Fatalf("FreeBytes = %d, %v; want -1, nil", free, err)
+	}
+}
+
+// getCounter counts object GET requests and records their Range headers.
+type getCounter struct {
+	base   http.RoundTripper
+	mu     sync.Mutex
+	ranges []string
+}
+
+func (g *getCounter) RoundTrip(r *http.Request) (*http.Response, error) {
+	if r.Method == http.MethodGet && !strings.Contains(r.URL.RawQuery, "list-type") && !strings.Contains(r.URL.RawQuery, "uploads") {
+		g.mu.Lock()
+		g.ranges = append(g.ranges, r.Header.Get("Range"))
+		g.mu.Unlock()
+	}
+	return g.base.RoundTrip(r)
+}
+
+func (g *getCounter) gets() []string {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return slices.Clone(g.ranges)
+}
+
+func newCountingS3(t *testing.T) (*storage.S3, *getCounter) {
+	t.Helper()
+	g := &getCounter{base: http.DefaultTransport}
+	cfg := testS3Config(t, testBucket)
+	cfg.HTTPClient = &http.Client{Transport: g}
+	return newTestS3With(t, cfg), g
+}
+
+func openHelloWorld(t *testing.T) (storage.Blob, *getCounter) {
+	t.Helper()
+	s, g := newCountingS3(t)
+	data := []byte("hello world")
+	k := keyFor(1, data)
+	commitBytes(t, s, k, data)
+	b, err := s.Open(context.Background(), k)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	t.Cleanup(func() { b.Close() })
+	return b, g
+}
+
+func TestS3Contract(t *testing.T) {
+	runContract(t, func(t *testing.T) storage.Store { return newTestS3(t) })
+}
+
+func TestS3BlobSeekProbeNoGet(t *testing.T) {
+	b, g := openHelloWorld(t)
+	if end, err := b.Seek(0, io.SeekEnd); err != nil || end != 11 {
+		t.Fatalf("Seek end = %d, %v", end, err)
+	}
+	if start, err := b.Seek(0, io.SeekStart); err != nil || start != 0 {
+		t.Fatalf("Seek start = %d, %v", start, err)
+	}
+	if b.Size() != 11 {
+		t.Fatalf("Size = %d", b.Size())
+	}
+	if got := g.gets(); len(got) != 0 {
+		t.Fatalf("size probe issued GETs: %v", got)
+	}
+}
+
+func TestS3BlobReadAndReseek(t *testing.T) {
+	b, g := openHelloWorld(t)
+	got, err := io.ReadAll(b)
+	if err != nil || string(got) != "hello world" {
+		t.Fatalf("ReadAll = %q, %v", got, err)
+	}
+	if n := len(g.gets()); n != 1 {
+		t.Fatalf("ReadAll issued %d GETs, want 1", n)
+	}
+	if _, err := b.Seek(6, io.SeekStart); err != nil {
+		t.Fatalf("Seek: %v", err)
+	}
+	buf := make([]byte, 5)
+	if _, err := io.ReadFull(b, buf); err != nil || string(buf) != "world" {
+		t.Fatalf("read after seek = %q, %v", buf, err)
+	}
+	gets := g.gets()
+	if len(gets) != 2 || gets[1] != "bytes=6-" {
+		t.Fatalf("GET ranges = %q, want second to be bytes=6-", gets)
+	}
+}
+
+func TestS3BlobSeekPastEndEOF(t *testing.T) {
+	b, g := openHelloWorld(t)
+	if _, err := b.Seek(16, io.SeekStart); err != nil {
+		t.Fatalf("Seek past end: %v", err)
+	}
+	if n, err := b.Read(make([]byte, 4)); n != 0 || err != io.EOF {
+		t.Fatalf("Read past end = %d, %v; want 0, EOF", n, err)
+	}
+	if got := g.gets(); len(got) != 0 {
+		t.Fatalf("read past end issued GETs: %v", got)
+	}
+}
+
+func TestS3BlobNegativeSeekErrors(t *testing.T) {
+	b, _ := openHelloWorld(t)
+	if _, err := b.Seek(-1, io.SeekStart); err == nil {
+		t.Fatal("Seek(-1, Start) succeeded")
 	}
 }

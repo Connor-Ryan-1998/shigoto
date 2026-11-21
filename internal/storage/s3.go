@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -336,6 +337,88 @@ func (s *S3) copyObject(ctx context.Context, src, dest string, size int64) error
 		abort()
 		return fmt.Errorf("storage: completing copy to %s: %w", dest, err)
 	}
+	return nil
+}
+
+// Open returns the blob for k, or ErrNotFound. It issues one HeadObject
+// for the size; bytes are fetched lazily with ranged GETs.
+func (s *S3) Open(ctx context.Context, k Key) (Blob, error) {
+	key := s.objectKey(k)
+	head, err := s.client.HeadObject(ctx, &s3.HeadObjectInput{Bucket: &s.bucket, Key: &key})
+	if isNotFound(err) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("storage: opening %s: %w", key, err)
+	}
+	return &s3Blob{s: s, ctx: ctx, key: key, size: aws.ToInt64(head.ContentLength)}, nil
+}
+
+// s3Blob is a seekable view of an object. Seeking only moves the offset
+// (so http.ServeContent's seek-to-end size probe costs nothing); the next
+// Read opens a GET with Range: bytes=<offset>-.
+type s3Blob struct {
+	s    *S3
+	ctx  context.Context
+	key  string
+	size int64
+	off  int64
+	body io.ReadCloser
+}
+
+func (b *s3Blob) Size() int64 { return b.size }
+
+func (b *s3Blob) Read(p []byte) (int, error) {
+	if b.off >= b.size {
+		return 0, io.EOF
+	}
+	if b.body == nil {
+		rng := fmt.Sprintf("bytes=%d-", b.off)
+		out, err := b.s.client.GetObject(b.ctx, &s3.GetObjectInput{Bucket: &b.s.bucket, Key: &b.key, Range: &rng})
+		if err != nil {
+			return 0, fmt.Errorf("storage: reading %s: %w", b.key, err)
+		}
+		b.body = out.Body
+	}
+	n, err := b.body.Read(p)
+	b.off += int64(n)
+	if err == io.EOF && b.off < b.size {
+		err = io.ErrUnexpectedEOF
+	}
+	return n, err
+}
+
+func (b *s3Blob) Seek(offset int64, whence int) (int64, error) {
+	var next int64
+	switch whence {
+	case io.SeekStart:
+		next = offset
+	case io.SeekCurrent:
+		next = b.off + offset
+	case io.SeekEnd:
+		next = b.size + offset
+	default:
+		return 0, errors.New("storage: invalid whence")
+	}
+	if next < 0 {
+		return 0, errors.New("storage: negative position")
+	}
+	if next != b.off {
+		b.closeBody()
+		b.off = next
+	}
+	return next, nil
+}
+
+func (b *s3Blob) closeBody() {
+	if b.body != nil {
+		_ = b.body.Close()
+		b.body = nil
+	}
+}
+
+func (b *s3Blob) Close() error {
+	b.closeBody()
 	return nil
 }
 
