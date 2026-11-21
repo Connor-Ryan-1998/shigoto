@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { setPage } from '../../lib/test/app.svelte';
 import { apiMock, apiError, mockApi, deferred } from '../../lib/test/mock-api';
 import { signIn } from '../../lib/test/session';
+import { session } from '../../lib/session.svelte';
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import Page from './+page.svelte';
@@ -16,6 +17,30 @@ beforeEach(() => {
 });
 
 describe('[org] dashboard', () => {
+	it.each(['unknown organisation', 'missing permission'])('shows an unavailable state for %s, not an endless skeleton', async (condition) => {
+		if (condition === 'unknown organisation') {
+			setPage({ params: { org: 'foreign' } });
+		} else {
+			signIn({ perms: [] });
+		}
+		render(Page);
+		expect(await screen.findByText('Organisation unavailable or dashboard access denied.')).toBeTruthy();
+		expect(screen.queryByText('Loading dashboard…')).toBeNull();
+		await fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+		expect(screen.getByText('Organisation unavailable or dashboard access denied.')).toBeTruthy();
+		expect(apiMock).not.toHaveBeenCalled();
+	});
+
+	it('waits for session initialization before deciding access', async () => {
+		session.clear();
+		mockApi({ 'GET /api/v1/orgs/acme/dashboard': { core: emptyCore, modules: {} } });
+		render(Page);
+		expect(screen.getByText('Loading dashboard…')).toBeTruthy();
+		expect(screen.queryByText('Organisation unavailable or dashboard access denied.')).toBeNull();
+		signIn();
+		expect(await screen.findByText('No invoices yet — create one')).toBeTruthy();
+	});
+
 	it('shows invoice onboarding without fetching hidden cash flow', async () => {
 		mockApi({ 'GET /api/v1/orgs/acme/dashboard': { core: emptyCore, modules: {} } });
 		render(Page);

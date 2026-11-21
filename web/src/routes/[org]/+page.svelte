@@ -30,6 +30,7 @@
 	let errorMessage = $state('');
 	let core = $state<CoreDashboard | null>(null);
 	let cards = $state<LoadedCard[]>([]);
+	let retry = $state(0);
 	let generation = 0;
 
 	async function load(org: string) {
@@ -65,14 +66,16 @@
 
 	$effect(() => {
 		const org = page.params.org ?? '';
-		const membership = session.currentOrg;
+		const membership = session.me?.orgs.find((o) => o.slug === org);
 		const permissions = membership?.perms.join(',') ?? '';
+		retry;
 		if (org && membership?.slug === org && permissions.split(',').includes('invoices_read')) {
 			void load(org);
 		} else {
 			core = null;
 			cards = [];
-			status = 'loading';
+			errorMessage = session.me ? 'Organisation unavailable or dashboard access denied.' : '';
+			status = session.me ? 'error' : 'loading';
 		}
 		return () => { generation++; };
 	});
@@ -100,7 +103,7 @@
 {:else if status === 'error'}
 	<EmptyState title="Couldn't load the dashboard" description={errorMessage}>
 		{#snippet action()}
-			<Button onclick={() => load(page.params.org ?? '')}>Retry</Button>
+			<Button onclick={() => retry++}>Retry</Button>
 		{/snippet}
 	</EmptyState>
 {:else if core}
