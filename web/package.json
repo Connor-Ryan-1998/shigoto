@@ -21,6 +21,7 @@
     "@types/node": "24.19.2",
     "daisyui": "5.7.50",
     "jsdom": "31.0.0",
+    "layerchart": "2.11.0",
     "svelte": "5.57.3",
     "svelte-check": "4.7.8",
     "tailwindcss": "4.3.5",

@@ -1,8 +1,8 @@
 <script lang="ts">
 	import type { Component } from 'svelte';
-	import { onMount } from 'svelte';
 	import { page } from '$app/state';
 	import { api, ApiError } from '../../lib/api';
+	import { session } from '../../lib/session.svelte';
 	import PageHeader from '../../lib/components/PageHeader.svelte';
 	import EmptyState from '../../lib/components/EmptyState.svelte';
 	import Button from '../../lib/components/Button.svelte';
@@ -10,6 +10,7 @@
 	import { property } from '../../lib/modules/property/manifest';
 	import { timesheets } from '../../lib/modules/timesheets/manifest';
 	import { reconciliation } from '../../lib/modules/reconciliation/manifest';
+	import CashFlowCard from '../../lib/modules/reconciliation/CashFlowCard.svelte';
 
 	// Dashboard response shape (GET /api/v1/orgs/{org}/dashboard): "modules"
 	// only contains the sections the caller's role may see, keyed by module
@@ -29,14 +30,17 @@
 	let errorMessage = $state('');
 	let core = $state<CoreDashboard | null>(null);
 	let cards = $state<LoadedCard[]>([]);
+	let generation = 0;
 
-	async function load() {
+	async function load(org: string) {
+		const request = ++generation;
 		status = 'loading';
 		errorMessage = '';
+		core = null;
+		cards = [];
 		try {
-			const org = page.params.org;
 			const res = await api<DashboardResponse>('GET', `/api/v1/orgs/${org}/dashboard`);
-			core = res.core;
+			if (request !== generation) return;
 
 			const loaded: LoadedCard[] = [];
 			for (const manifest of moduleManifests) {
@@ -46,21 +50,36 @@
 				// rather than a card for data that isn't there.
 				if (section === undefined || !manifest.dashboardCard) continue;
 				const mod = await manifest.dashboardCard();
+				if (request !== generation) return;
 				loaded.push({ name: manifest.name, Component: mod.default, data: section });
 			}
 			cards = loaded;
+			core = res.core;
 			status = 'ready';
 		} catch (e) {
+			if (request !== generation) return;
 			errorMessage = e instanceof ApiError ? e.message : 'Something went wrong.';
 			status = 'error';
 		}
 	}
 
-	onMount(load);
+	$effect(() => {
+		const org = page.params.org ?? '';
+		const membership = session.currentOrg;
+		const permissions = membership?.perms.join(',') ?? '';
+		if (org && membership?.slug === org && permissions.split(',').includes('invoices_read')) {
+			void load(org);
+		} else {
+			core = null;
+			cards = [];
+			status = 'loading';
+		}
+		return () => { generation++; };
+	});
 
 	// An org with zero invoices of any status (draft, open, paid, void,
 	// uncollectible) has nothing to work with yet, so show the onboarding
-	// empty state instead of three zero tiles. invoice_count (unlike
+	// empty state instead of zero receivables. invoice_count (unlike
 	// open/overdue/draft_count) isn't scoped to one status, so a settled
 	// org (every invoice paid or void) correctly stays on the normal tiles
 	// view instead of being mistaken for a brand-new one.
@@ -81,7 +100,7 @@
 {:else if status === 'error'}
 	<EmptyState title="Couldn't load the dashboard" description={errorMessage}>
 		{#snippet action()}
-			<Button onclick={load}>Retry</Button>
+			<Button onclick={() => load(page.params.org ?? '')}>Retry</Button>
 		{/snippet}
 	</EmptyState>
 {:else if core}
@@ -90,10 +109,13 @@
 	{:else}
 		<DashboardCore {core} org={page.params.org ?? ''} />
 	{/if}
+	{#if cards.some((card) => card.name === 'reconciliation')}
+		<div class="mt-6"><CashFlowCard org={page.params.org ?? ''} /></div>
+	{/if}
 	<!-- Module cards show even before the first invoice: an open urgent
 	     repair must never hide behind the onboarding state. -->
 	{#if cards.length > 0}
-		<div class="mt-4 grid grid-cols-[repeat(auto-fit,minmax(16rem,1fr))] gap-4">
+		<div class="mt-6 grid grid-cols-[repeat(auto-fit,minmax(min(100%,20rem),1fr))] items-start gap-6">
 			{#each cards as { name, Component, data } (name)}
 				<Component {data} org={page.params.org ?? ''} />
 			{/each}
