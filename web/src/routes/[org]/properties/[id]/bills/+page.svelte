@@ -94,7 +94,7 @@
 									<td class="text-right tabular-nums">{money(l.ex_gst)}</td>
 									<td class="text-right tabular-nums">{money(l.gst)}</td>
 									<td class="text-right tabular-nums">{money(l.incl_gst)}</td>
-									<td>{#if l.receipt_file_id && canReceipts}<a class="link link-primary" href={`/api/v1/orgs/${org}/files/${l.receipt_file_id}`}>{l.receipt_name || 'Receipt'}</a>{:else}—{/if}</td>
+									<td>{#if l.receipt_file_id && canReceipts}<a class="link link-primary" href={`/api/v1/orgs/${org}/files/${l.receipt_file_id}`} data-sveltekit-reload>{l.receipt_name || 'Receipt'}</a>{:else}—{/if}</td>
 									<td><a class="link" href={`/${org}/expenses/${l.expense_id}`} aria-label={`View expense ${l.expense_id}`}>View</a></td>
 								</tr>
 							{/each}

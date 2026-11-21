@@ -29,7 +29,9 @@ describe('property depreciation tab', () => {
 		expect(within(summary).getByText('$450.00')).toBeTruthy();
 		expect(within(summary).getByText('$7,950.00')).toBeTruthy();
 		const table = screen.getByRole('table', { name: 'Depreciation items' });
-		expect(within(table).getByRole('link', { name: 'bmt.pdf' }).getAttribute('href')).toBe('/api/v1/orgs/acme/properties/1/files/9');
+		const doc = within(table).getByRole('link', { name: 'bmt.pdf' });
+		expect(doc.getAttribute('href')).toBe('/api/v1/orgs/acme/properties/1/files/9');
+		expect(doc.hasAttribute('data-sveltekit-reload')).toBe(true);
 	});
 
 	it('uses last year when the URL asks for it', async () => {

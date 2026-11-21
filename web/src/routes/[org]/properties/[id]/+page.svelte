@@ -254,7 +254,7 @@
 										<td class="text-right tabular-nums">{optMoney(p.sum_insured)}</td>
 										<td class="text-right tabular-nums">{optMoney(p.premium)}</td>
 										<td class="text-right tabular-nums">{optMoney(p.excess)}</td>
-										<td>{#if p.file_id}<a class="link link-primary" href={`${base}/files/${p.file_id}`}>{p.file_name}</a>{:else}—{/if}</td>
+										<td>{#if p.file_id}<a class="link link-primary" href={`${base}/files/${p.file_id}`} data-sveltekit-reload>{p.file_name}</a>{:else}—{/if}</td>
 										<td>{#if canWrite}<Button variant="secondary" size="sm" onclick={() => { editingPolicy = p; policyOpen = true; }}>Edit</Button>{/if}</td>
 									</tr>
 								{/each}

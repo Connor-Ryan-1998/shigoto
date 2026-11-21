@@ -65,7 +65,9 @@ describe('property details page', () => {
 	it('flags the current policy renewing within 30 days', async () => {
 		render(Page);
 		expect(await screen.findByText('Renews in 17 days')).toBeTruthy();
-		expect(screen.getByRole('link', { name: 'policy.pdf' }).getAttribute('href')).toBe(`${base}/files/9`);
+		const policy = screen.getByRole('link', { name: 'policy.pdf' });
+		expect(policy.getAttribute('href')).toBe(`${base}/files/9`);
+		expect(policy.hasAttribute('data-sveltekit-reload')).toBe(true);
 	});
 
 	it('is read-only without write permission', async () => {

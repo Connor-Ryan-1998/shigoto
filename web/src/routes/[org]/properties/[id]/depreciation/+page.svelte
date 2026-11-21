@@ -102,7 +102,7 @@
 							<td class="text-right tabular-nums">{item.cost === null ? '—' : money(item.cost)}</td>
 							<td class="text-right tabular-nums">{money(amountFor(item))}</td>
 							<td>
-								{#each item.documents as d (d.id)}<a class="link link-primary block" href={`${base}/files/${d.id}`}>{d.original_name}</a>{:else}—{/each}
+								{#each item.documents as d (d.id)}<a class="link link-primary block" href={`${base}/files/${d.id}`} data-sveltekit-reload>{d.original_name}</a>{:else}—{/each}
 							</td>
 							<td>{#if canWrite}<Button variant="secondary" size="sm" onclick={() => { editing = item; dialogOpen = true; }}>Edit {item.name}</Button>{/if}</td>
 						</tr>
