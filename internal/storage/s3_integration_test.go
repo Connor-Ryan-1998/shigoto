@@ -48,11 +48,21 @@ func testS3Config(t *testing.T, bucket string) storage.S3Config {
 		Endpoint:        endpoint,
 		Region:          "auto",
 		Bucket:          bucket,
-		AccessKeyID:     "test",
-		SecretAccessKey: "test",
+		AccessKeyID:     envOr("SHIGOTO_TEST_S3_ACCESS_KEY_ID", "test"),
+		SecretAccessKey: envOr("SHIGOTO_TEST_S3_SECRET_ACCESS_KEY", "test"),
 		PathStyle:       true,
 		Prefix:          strings.Trim(unsafeName.ReplaceAllString(t.Name(), "-"), "-") + "-" + randomHex(t, 4) + "/",
 	}
+}
+
+// envOr returns the environment variable name, or def when unset. The
+// local SeaweedFS accepts any credentials; set real ones to run against an
+// authenticated store.
+func envOr(name, def string) string {
+	if v := os.Getenv(name); v != "" {
+		return v
+	}
+	return def
 }
 
 // newTestS3 returns an S3 store on the shared test bucket under a prefix
