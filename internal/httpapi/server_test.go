@@ -246,3 +246,29 @@ func TestReadJSONRejectsUnknownField(t *testing.T) {
 		t.Fatal("readJSON with unknown field: got nil error, want error")
 	}
 }
+
+func TestMetaReportsStrataAssistant(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		llm  *config.LLM
+		want bool
+	}{
+		{"unconfigured", nil, false},
+		{"configured", &config.LLM{BaseURL: "https://llm.example/v1", APIKey: "k", Model: "m", ExtractModel: "m", PDFMode: "file"}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			handler := New(Deps{Cfg: config.Config{Modules: map[string]bool{}, LLM: tc.llm}})
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/meta", nil))
+			var body struct {
+				StrataAssistant *bool `json:"strata_assistant"`
+			}
+			if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+				t.Fatalf("decoding meta: %v", err)
+			}
+			if body.StrataAssistant == nil || *body.StrataAssistant != tc.want {
+				t.Fatalf("meta strata_assistant = %v, want %v", body.StrataAssistant, tc.want)
+			}
+		})
+	}
+}

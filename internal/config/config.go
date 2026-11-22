@@ -62,6 +62,38 @@ type S3 struct {
 	Prefix string
 }
 
+// LLM is the OpenAI-compatible chat endpoint used by the strata assistant
+// for document extraction and question answering. A nil *LLM on Config
+// means the assistant is disabled.
+type LLM struct {
+	// BaseURL is the API root, e.g. https://openrouter.ai/api/v1
+	// (SHIGOTO_LLM_BASE_URL); /chat/completions is appended.
+	BaseURL string
+	APIKey  string
+	// Model answers questions (SHIGOTO_LLM_MODEL).
+	Model string
+	// ExtractModel reads uploaded PDFs (SHIGOTO_LLM_EXTRACT_MODEL,
+	// default Model).
+	ExtractModel string
+	// PDFMode is how PDF pages reach ExtractModel
+	// (SHIGOTO_LLM_PDF_MODE): only "file" is supported; "image" is
+	// reserved.
+	PDFMode string
+}
+
+// Embed is the OpenAI-compatible embeddings endpoint. A nil *Embed means
+// strata search is full-text only. The endpoint must honour the
+// "dimensions" request parameter.
+type Embed struct {
+	BaseURL string
+	APIKey  string
+	Model   string
+	// QueryPrefix and DocumentPrefix are prepended to search queries and
+	// stored passages respectively, for models that embed them differently.
+	QueryPrefix    string
+	DocumentPrefix string
+}
+
 // Config is shigoto's runtime configuration.
 type Config struct {
 	Listen      string
@@ -99,7 +131,15 @@ type Config struct {
 	// OIDC holds the generic OIDC staff-login configuration. nil means SSO
 	// is disabled ("sso": false in GET /api/v1/meta).
 	OIDC *OIDC
+	// LLM configures the strata assistant's model; nil disables it.
+	LLM *LLM
+	// Embed configures embeddings for strata search; nil means full-text
+	// search only. Requires LLM.
+	Embed *Embed
 }
+
+// StrataAssistant reports whether the strata assistant is configured.
+func (c Config) StrataAssistant() bool { return c.LLM != nil }
 
 // Load reads configuration from environment variables via getenv.
 func Load(getenv func(string) string) (Config, error) {
@@ -198,6 +238,16 @@ func Load(getenv func(string) string) (Config, error) {
 		return Config{}, err
 	}
 	c.OIDC = oidcCfg
+
+	if c.LLM, err = loadLLM(getenv); err != nil {
+		return Config{}, err
+	}
+	if c.Embed, err = loadEmbed(getenv); err != nil {
+		return Config{}, err
+	}
+	if c.Embed != nil && c.LLM == nil {
+		return Config{}, fmt.Errorf("SHIGOTO_EMBED_* requires the SHIGOTO_LLM_* group: embeddings only serve the strata assistant")
+	}
 
 	if tp := getenv("SHIGOTO_TRUSTED_PROXY"); tp != "" {
 		_, cidr, err := net.ParseCIDR(tp)
@@ -387,4 +437,56 @@ func nonNegativeBytes(getenv func(string) string, name string, def int64) (int64
 		return 0, fmt.Errorf("%s must be a non-negative byte count, got %q", name, v)
 	}
 	return n, nil
+}
+
+// httpURL reports whether raw is an absolute http(s) URL with a host.
+func httpURL(raw string) bool {
+	u, err := url.Parse(raw)
+	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != ""
+}
+
+// endpointGroup reads <prefix>_BASE_URL, _API_KEY and _MODEL, which must be
+// all set or all unset. ok is false when all are unset.
+func endpointGroup(getenv func(string) string, prefix string) (base, key, model string, ok bool, err error) {
+	base, key, model = getenv(prefix+"_BASE_URL"), getenv(prefix+"_API_KEY"), getenv(prefix+"_MODEL")
+	if base == "" && key == "" && model == "" {
+		return "", "", "", false, nil
+	}
+	if base == "" || key == "" || model == "" {
+		return "", "", "", false, fmt.Errorf("%s_BASE_URL, %s_API_KEY and %s_MODEL must all be set, or none of them", prefix, prefix, prefix)
+	}
+	if !httpURL(base) {
+		return "", "", "", false, fmt.Errorf("%s_BASE_URL must be an absolute http:// or https:// URL, got %q", prefix, base)
+	}
+	return base, key, model, true, nil
+}
+
+func loadLLM(getenv func(string) string) (*LLM, error) {
+	base, key, model, ok, err := endpointGroup(getenv, "SHIGOTO_LLM")
+	if err != nil || !ok {
+		return nil, err
+	}
+	l := &LLM{BaseURL: base, APIKey: key, Model: model,
+		ExtractModel: getenv("SHIGOTO_LLM_EXTRACT_MODEL"), PDFMode: getenv("SHIGOTO_LLM_PDF_MODE")}
+	if l.ExtractModel == "" {
+		l.ExtractModel = model
+	}
+	switch l.PDFMode {
+	case "", "file":
+		l.PDFMode = "file"
+	case "image":
+		return nil, fmt.Errorf("SHIGOTO_LLM_PDF_MODE=image is reserved and not yet supported; use \"file\"")
+	default:
+		return nil, fmt.Errorf("invalid SHIGOTO_LLM_PDF_MODE %q (want \"file\")", l.PDFMode)
+	}
+	return l, nil
+}
+
+func loadEmbed(getenv func(string) string) (*Embed, error) {
+	base, key, model, ok, err := endpointGroup(getenv, "SHIGOTO_EMBED")
+	if err != nil || !ok {
+		return nil, err
+	}
+	return &Embed{BaseURL: base, APIKey: key, Model: model,
+		QueryPrefix: getenv("SHIGOTO_EMBED_QUERY_PREFIX"), DocumentPrefix: getenv("SHIGOTO_EMBED_DOCUMENT_PREFIX")}, nil
 }

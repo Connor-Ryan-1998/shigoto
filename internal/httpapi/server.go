@@ -180,7 +180,7 @@ func New(d Deps) http.Handler {
 	}
 
 	mux.HandleFunc("GET /api/v1/meta", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]any{"modules": enabled, "sso": d.Auth.OIDCEnabled()})
+		writeJSON(w, http.StatusOK, map[string]any{"modules": enabled, "sso": d.Auth.OIDCEnabled(), "strata_assistant": d.Cfg.StrataAssistant()})
 	})
 
 	return csrfMiddleware(d.Cfg.BaseURL, routeWebUI(mux))
