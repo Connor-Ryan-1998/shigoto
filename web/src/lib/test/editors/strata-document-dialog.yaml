@@ -1,0 +1,14 @@
+id: strata-document-upload
+component: StrataDocumentDialog
+props: {open: true, org: acme, schemeId: 3}
+callbacks: [onsaved]
+fill: {PDF document: agm-2024.pdf, Type: minutes, Title: AGM 2024, Document date: "2024-09-12"}
+submit: Upload document
+request: POST /api/v1/orgs/acme/strata-schemes/3/documents?doc_type=minutes&title=AGM+2024&document_date=2024-09-12
+contract:
+  blocks_duplicate_submit: true
+  preserves_input_on: 422
+  cancel: Cancel
+  busy_dismiss_blocked: true
+  dirty_dismiss_confirms: true
+  dirty_navigation_blocked: true

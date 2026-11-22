@@ -24,6 +24,7 @@ import RequestChangeDialog from '../modules/property/RequestChangeDialog.svelte'
 import PropertyNotesPage from '../../routes/[org]/properties/[id]/notes/+page.svelte';
 import StrataSection from '../modules/property/StrataSection.svelte';
 import StrataSchemeDialog from '../modules/property/StrataSchemeDialog.svelte';
+import StrataDocumentDialog from '../modules/property/strata/StrataDocumentDialog.svelte';
 
 export const components = {
 	AssignSupplierDialog,
@@ -48,6 +49,7 @@ export const components = {
 	PropertyDetailsPage,
 	PropertyNotesPage,
 	SettingsPage,
+	StrataDocumentDialog,
 	StrataSchemeDialog,
 	StrataSection
 } as const;
