@@ -334,6 +334,29 @@ discards that attempt's media, preserving the previous sandbox. If a database
 connection fails during commit, the outcome may be unknown: media is retained
 to avoid broken file references. Rerun `populate-sbx` to restore known access details.
 
+#### Strata assistant in the sandbox
+
+`sbx-property`'s Garden Terrace Body Corporate holds the chairperson and
+treasurer positions, so its Strata tab shows both assistants and the Documents
+card. The assistant is off until a model is configured: put the settings in a
+`.env` file next to `docker-compose.yml` (git-ignored; never commit keys), then
+`docker compose up -d app`:
+
+```bash
+SHIGOTO_LLM_BASE_URL=https://openrouter.ai/api/v1
+SHIGOTO_LLM_API_KEY=<your key>
+SHIGOTO_LLM_MODEL=deepseek/deepseek-v4.1-flash
+# Optional semantic search (the endpoint must honour "dimensions"):
+SHIGOTO_EMBED_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/
+SHIGOTO_EMBED_API_KEY=<your key>
+SHIGOTO_EMBED_MODEL=gemini-embedding-2
+```
+
+Uploaded PDFs are sent to these providers and each upload and question costs
+real API usage. Upload fictional documents only. The indexer runs with the
+scheduler (on by default in Compose). Rerunning `populate-sbx` deletes the
+sandbox's strata documents and everything read from them.
+
 ## Money and GST rounding
 
 All money is represented in cents as `int64`. GST is calculated per invoice or expense line and rounded half away from zero to the cent. The rounding rule for n/d is: for n≥0, use (2n+d)/(2d); for n<0, negate, compute, and negate the result. This ensures that 0.5 cents rounds away from zero in both directions.

@@ -193,3 +193,47 @@ func TestPopulateRefusesExternalFileReference(t *testing.T) {
 		t.Fatal("shared file removed")
 	}
 }
+
+// An uploaded strata document (and everything read from it) on a sandbox
+// scheme must not block rerunning populate-sbx; an unrelated org's
+// documents are untouched.
+func TestPopulateResetsStrataDocuments(t *testing.T) {
+	e := testkit.New(t)
+	result := populateTest(t, e.Pool)
+	store := storage.NewDisk(t.TempDir())
+	other := e.Org("unrelated")
+	otherScheme := e.StrataScheme(other, testkit.Positions(true, false, true))
+	var scheme int64
+	if err := e.Pool.QueryRow(e.Ctx, `SELECT id FROM strata_schemes WHERE org_id=$1 AND name='Garden Terrace Body Corporate'`,
+		result.Orgs[0].ID).Scan(&scheme); err != nil {
+		t.Fatal(err)
+	}
+	owned := e.StrataDocument(store, result.Orgs[0], scheme, testkit.DocPDF(testkit.PDF("sandbox minutes")))
+	kept := e.StrataDocument(store, other, otherScheme.ID, testkit.DocPDF(testkit.PDF("unrelated minutes")))
+	for _, doc := range []int64{owned.ID, kept.ID} {
+		mustExec(t, e.Pool, `INSERT INTO strata_document_pages (document_id,page_no,text) VALUES ($1,1,'Roof')`, doc)
+		mustExec(t, e.Pool, `INSERT INTO strata_chunks (org_id,scheme_id,document_id,page_from,page_to,text)
+			SELECT org_id,scheme_id,id,1,1,'Roof' FROM strata_documents WHERE id=$1`, doc)
+		mustExec(t, e.Pool, `INSERT INTO strata_motions (org_id,scheme_id,document_id,meeting_date,meeting_kind,text,outcome,page_no)
+			SELECT org_id,scheme_id,id,'2024-09-12','agm','Fix roof','carried',1 FROM strata_documents WHERE id=$1`, doc)
+		mustExec(t, e.Pool, `INSERT INTO strata_figures (org_id,scheme_id,document_id,fund,metric,label,period_end,amount_cents,page_no)
+			SELECT org_id,scheme_id,id,'sinking','balance','Closing','2025-06-30',100,1 FROM strata_documents WHERE id=$1`, doc)
+	}
+
+	populateTest(t, e.Pool)
+
+	if got := count(t, e.Pool, `SELECT count(*) FROM strata_documents WHERE id=$1`, owned.ID); got != 0 {
+		t.Error("strata_documents retained the old sandbox document")
+	}
+	for _, table := range []string{"strata_document_pages", "strata_chunks", "strata_motions", "strata_figures"} {
+		if got := count(t, e.Pool, `SELECT count(*) FROM `+table+` WHERE document_id=$1`, owned.ID); got != 0 {
+			t.Errorf("%s retained old sandbox rows", table)
+		}
+		if got := count(t, e.Pool, `SELECT count(*) FROM `+table+` WHERE document_id=$1`, kept.ID); got != 1 {
+			t.Errorf("%s changed unrelated rows", table)
+		}
+	}
+	if got := count(t, e.Pool, `SELECT count(*) FROM strata_documents WHERE id=$1`, kept.ID); got != 1 {
+		t.Fatal("unrelated strata document disappeared")
+	}
+}

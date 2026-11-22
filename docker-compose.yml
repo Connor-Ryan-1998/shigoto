@@ -57,6 +57,18 @@ services:
       SHIGOTO_SMTP_PORT: "1025"
       SHIGOTO_SMTP_FROM: "noreply@shigoto.local"
       SHIGOTO_SMTP_TLS: "none"
+      # Optional strata assistant, read from the git-ignored .env next to
+      # this file; empty values leave the assistant disabled.
+      SHIGOTO_LLM_BASE_URL: "${SHIGOTO_LLM_BASE_URL:-}"
+      SHIGOTO_LLM_API_KEY: "${SHIGOTO_LLM_API_KEY:-}"
+      SHIGOTO_LLM_MODEL: "${SHIGOTO_LLM_MODEL:-}"
+      SHIGOTO_LLM_EXTRACT_MODEL: "${SHIGOTO_LLM_EXTRACT_MODEL:-}"
+      SHIGOTO_LLM_PDF_MODE: "${SHIGOTO_LLM_PDF_MODE:-file}"
+      SHIGOTO_EMBED_BASE_URL: "${SHIGOTO_EMBED_BASE_URL:-}"
+      SHIGOTO_EMBED_API_KEY: "${SHIGOTO_EMBED_API_KEY:-}"
+      SHIGOTO_EMBED_MODEL: "${SHIGOTO_EMBED_MODEL:-}"
+      SHIGOTO_EMBED_QUERY_PREFIX: "${SHIGOTO_EMBED_QUERY_PREFIX:-}"
+      SHIGOTO_EMBED_DOCUMENT_PREFIX: "${SHIGOTO_EMBED_DOCUMENT_PREFIX:-}"
     volumes:
       - files:/data/files
     ports:

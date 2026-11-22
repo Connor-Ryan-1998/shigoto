@@ -265,3 +265,12 @@
     SHIGOTO_EMBED_API_KEY: g
     SHIGOTO_EMBED_MODEL: e
   err: SHIGOTO_EMBED_BASE_URL
+
+- name: empty assistant settings from local Compose leave it disabled
+  env:
+    SHIGOTO_LLM_BASE_URL: ""
+    SHIGOTO_LLM_API_KEY: ""
+    SHIGOTO_LLM_MODEL: ""
+    SHIGOTO_LLM_PDF_MODE: file
+    SHIGOTO_EMBED_BASE_URL: ""
+  want: {llm_configured: false, embed_configured: false}
