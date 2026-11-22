@@ -27,7 +27,8 @@ describe('strata tab', () => {
 		expect(await screen.findByRole('heading', { name: 'Harbour View CTS' })).toBeTruthy();
 		expect(screen.getByText('CTS 12345')).toBeTruthy();
 		expect(roleHeadings()).toEqual(['Secretary', 'Treasurer']);
-		expect(screen.getAllByText('Duties for this role will appear here.')).toHaveLength(2);
+		expect(screen.getAllByText('Duties for this role will appear here.')).toHaveLength(1);
+		expect(screen.getByText('The assistant is not configured.')).toBeTruthy();
 	});
 
 	it('renders all three when every position is held', async () => {

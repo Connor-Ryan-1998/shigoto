@@ -25,6 +25,9 @@ class SessionStore {
 	modules = $state<string[]>([]);
 	orgSlug = $state<string | null>(null);
 	sso = $state(false);
+	// strataAssistant is GET /api/v1/meta's strata_assistant: whether the
+	// server has a model configured for the strata role assistants.
+	strataAssistant = $state(false);
 
 	get currentOrg(): MeOrg | null {
 		if (!this.me || !this.orgSlug) return null;
@@ -43,6 +46,10 @@ class SessionStore {
 		this.sso = sso;
 	}
 
+	setStrataAssistant(on: boolean): void {
+		this.strataAssistant = on;
+	}
+
 	setOrg(slug: string): void {
 		this.orgSlug = slug;
 	}
@@ -52,6 +59,7 @@ class SessionStore {
 		this.modules = [];
 		this.orgSlug = null;
 		this.sso = false;
+		this.strataAssistant = false;
 	}
 }
 

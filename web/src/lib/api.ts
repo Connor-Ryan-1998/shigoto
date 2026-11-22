@@ -124,10 +124,11 @@ export async function api<T>(
 	method: 'GET' | 'POST' | 'PUT' | 'DELETE',
 	path: string,
 	body?: unknown | FormData,
-	// Internal: set on api()'s own recursive call after a successful
-	// re-login, so a request that 401s again right after can't retry
-	// forever. Callers never pass this.
-	isRetry = false
+	// signal aborts the request (fetch rejects with an AbortError).
+	// isRetry is internal: set on api()'s own recursive call after a
+	// successful re-login, so a request that 401s again right after can't
+	// retry forever. Callers never pass it.
+	{ signal, isRetry = false }: { signal?: AbortSignal; isRetry?: boolean } = {}
 ): Promise<T> {
 	const headers: Record<string, string> = {};
 	let requestBody: BodyInit | undefined;
@@ -147,7 +148,8 @@ export async function api<T>(
 		method,
 		headers,
 		body: requestBody,
-		credentials: 'same-origin'
+		credentials: 'same-origin',
+		signal
 	});
 
 	if (!res.ok) {
@@ -172,7 +174,7 @@ export async function api<T>(
 			if (!isRetry) {
 				const reloggedIn = await onUnauthorized();
 				if (reloggedIn) {
-					return api<T>(method, path, body, true);
+					return api<T>(method, path, body, { signal, isRetry: true });
 				}
 			} else {
 				// The retried request 401'd again right after a successful
