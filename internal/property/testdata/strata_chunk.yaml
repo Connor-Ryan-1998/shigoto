@@ -1,0 +1,33 @@
+# ChunkPages(pages, 1200, 200) cases. Each page is `text`, or `word`
+# repeated `times` times. `want` lists each chunk's page span and length.
+# Every case also checks that no chunk is longer than 1200 bytes and that
+# consecutive chunks of one page overlap.
+- name: long page splits into three overlapping chunks
+  pages: [{page_no: 1, word: "word ", times: 600}]
+  want:
+    - {page_from: 1, page_to: 1, len: 1199}
+    - {page_from: 1, page_to: 1, len: 1199}
+    - {page_from: 1, page_to: 1, len: 999}
+
+- name: short page is one chunk
+  pages: [{page_no: 4, text: "  Motion 5 carried.  "}]
+  want: [{page_from: 4, page_to: 4, len: 17}]
+
+- name: blank page has no chunks
+  pages: [{page_no: 1, text: "   \n  "}]
+  want: []
+
+- name: chunks never span pages
+  pages:
+    - {page_no: 1, text: "Levy notice"}
+    - {page_no: 2, text: "Sinking fund"}
+  want:
+    - {page_from: 1, page_to: 1, len: 11}
+    - {page_from: 2, page_to: 2, len: 12}
+
+- name: a long run without spaces still splits at the size
+  pages: [{page_no: 1, word: "x", times: 2500}]
+  want:
+    - {page_from: 1, page_to: 1, len: 1200}
+    - {page_from: 1, page_to: 1, len: 1200}
+    - {page_from: 1, page_to: 1, len: 500}

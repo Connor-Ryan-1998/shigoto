@@ -1,0 +1,144 @@
+# ParseExtraction(raw, type, batch) cases. `batch` is [from, to]. Each case
+# has exactly one of `want` or `err` (a substring of the error, which must
+# also wrap core.ErrInvalidInput). want.pages lists the page numbers in
+# order; motions and figures list the fields checked.
+- name: valid minutes with a motion
+  type: minutes
+  batch: [1, 2]
+  raw: |
+    {"pages":[{"page_no":1,"text":"  Minutes of AGM  "},{"page_no":2,"text":"Motion 5: replace roof. Carried."}],
+     "motions":[{"meeting_date":"2024-09-12","meeting_kind":"agm","motion_no":"5","text":"Replace the roof membrane","outcome":"carried","page_no":2}]}
+  want:
+    pages: [1, 2]
+    texts: ["Minutes of AGM", "Motion 5: replace roof. Carried."]
+    motions: [{motion_no: "5", outcome: carried, page_no: 2, meeting_date: "2024-09-12", meeting_kind: agm}]
+
+- name: unknown top-level keys are ignored
+  type: by_laws
+  batch: [3, 3]
+  raw: '{"pages":[{"page_no":3,"text":"By-law 12"}],"notes":"model chatter"}'
+  want: {pages: [3]}
+
+- name: pages may arrive out of order
+  type: other
+  batch: [1, 2]
+  raw: '{"pages":[{"page_no":2,"text":"b"},{"page_no":1,"text":"a"}]}'
+  want: {pages: [1, 2], texts: [a, b]}
+
+- name: missing page
+  type: minutes
+  batch: [1, 3]
+  raw: '{"pages":[{"page_no":1,"text":"a"},{"page_no":2,"text":"b"}]}'
+  err: page 3
+
+- name: duplicate page
+  type: minutes
+  batch: [1, 2]
+  raw: '{"pages":[{"page_no":1,"text":"a"},{"page_no":1,"text":"a"},{"page_no":2,"text":"b"}]}'
+  err: page 1
+
+- name: page outside batch
+  type: minutes
+  batch: [1, 1]
+  raw: '{"pages":[{"page_no":1,"text":"a"},{"page_no":7,"text":"b"}]}'
+  err: page 7
+
+- name: blank page text is allowed
+  type: minutes
+  batch: [1, 1]
+  raw: '{"pages":[{"page_no":1,"text":"   "}]}'
+  want: {pages: [1], texts: [""]}
+
+- name: motion on a budget is rejected
+  type: budget
+  batch: [1, 1]
+  raw: '{"pages":[{"page_no":1,"text":"a"}],"motions":[{"meeting_date":"2024-09-12","meeting_kind":"agm","text":"x","outcome":"carried","page_no":1}]}'
+  err: motions
+
+- name: empty motions list on a budget is fine
+  type: budget
+  batch: [1, 1]
+  raw: '{"pages":[{"page_no":1,"text":"a"}],"motions":[],"figures":[]}'
+  want: {pages: [1]}
+
+- name: figure on minutes is rejected
+  type: minutes
+  batch: [1, 1]
+  raw: '{"pages":[{"page_no":1,"text":"a"}],"figures":[{"fund":"admin","metric":"levy","label":"x","period_end":"2025-06-30","amount":"1.00","page_no":1}]}'
+  err: figures
+
+- name: unknown motion outcome
+  type: minutes
+  batch: [1, 1]
+  raw: '{"pages":[{"page_no":1,"text":"a"}],"motions":[{"meeting_date":"2024-09-12","meeting_kind":"agm","text":"x","outcome":"passed","page_no":1}]}'
+  err: passed
+
+- name: blank motion text
+  type: minutes
+  batch: [1, 1]
+  raw: '{"pages":[{"page_no":1,"text":"a"}],"motions":[{"meeting_date":"2024-09-12","meeting_kind":"agm","text":"  ","outcome":"carried","page_no":1}]}'
+  err: motion text
+
+- name: bad motion date
+  type: minutes
+  batch: [1, 1]
+  raw: '{"pages":[{"page_no":1,"text":"a"}],"motions":[{"meeting_date":"12/09/2024","meeting_kind":"agm","text":"x","outcome":"carried","page_no":1}]}'
+  err: meeting_date
+
+- name: amounts parse to exact cents
+  type: financial_statement
+  batch: [1, 2]
+  raw: |
+    {"pages":[{"page_no":1,"text":"a"},{"page_no":2,"text":"b"}],
+     "figures":[
+       {"fund":"sinking","metric":"balance","label":"Closing balance","period_start":"2024-07-01","period_end":"2025-06-30","amount":"1,234.50","page_no":1},
+       {"fund":"admin","metric":"actual_expense","label":"Deficit","period_start":null,"period_end":"2025-06-30","amount":"$(1,200.00)","page_no":2},
+       {"fund":"other","metric":"other","label":"Round","period_end":"2025-06-30","amount":"99","page_no":2}]}
+  want:
+    pages: [1, 2]
+    figures:
+      - {label: Closing balance, amount_cents: 123450, period_start: "2024-07-01", period_end: "2025-06-30", page_no: 1}
+      - {label: Deficit, amount_cents: -120000, period_start: "", period_end: "2025-06-30", page_no: 2}
+      - {label: Round, amount_cents: 9900, period_start: "", period_end: "2025-06-30", page_no: 2}
+
+- name: numeric amount rejected
+  type: budget
+  batch: [1, 1]
+  raw: '{"pages":[{"page_no":1,"text":"a"}],"figures":[{"fund":"admin","metric":"levy","label":"x","period_end":"2025-06-30","amount":1234.5,"page_no":1}]}'
+  err: amount
+
+- name: blank amount rejected
+  type: budget
+  batch: [1, 1]
+  raw: '{"pages":[{"page_no":1,"text":"a"}],"figures":[{"fund":"admin","metric":"levy","label":"x","period_end":"2025-06-30","amount":"","page_no":1}]}'
+  err: amount
+
+- name: three decimal places rejected
+  type: budget
+  batch: [1, 1]
+  raw: '{"pages":[{"page_no":1,"text":"a"}],"figures":[{"fund":"admin","metric":"levy","label":"x","period_end":"2025-06-30","amount":"1.005","page_no":1}]}'
+  err: amount
+
+- name: figure page outside batch
+  type: budget
+  batch: [1, 5]
+  raw: '{"pages":[{"page_no":1,"text":"a"},{"page_no":2,"text":"a"},{"page_no":3,"text":"a"},{"page_no":4,"text":"a"},{"page_no":5,"text":"a"}],"figures":[{"fund":"admin","metric":"levy","label":"x","period_end":"2025-06-30","amount":"1.00","page_no":9}]}'
+  err: page_no 9
+
+- name: unknown fund
+  type: levy_notice
+  batch: [1, 1]
+  raw: '{"pages":[{"page_no":1,"text":"a"}],"figures":[{"fund":"reserve","metric":"levy","label":"x","period_end":"2025-06-30","amount":"1.00","page_no":1}]}'
+  err: reserve
+
+- name: missing period end
+  type: levy_notice
+  batch: [1, 1]
+  raw: '{"pages":[{"page_no":1,"text":"a"}],"figures":[{"fund":"admin","metric":"levy","label":"x","amount":"1.00","page_no":1}]}'
+  err: period_end
+
+- name: not JSON
+  type: minutes
+  batch: [1, 1]
+  raw: 'Here are the pages you asked for'
+  err: JSON
