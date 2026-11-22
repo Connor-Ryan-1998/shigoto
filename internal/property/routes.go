@@ -103,6 +103,7 @@ func registerRoutes(mux *http.ServeMux, d module.Deps) {
 	registerStatementRoutes(mux, d)
 	registerMaintenanceRoutes(mux, d)
 	registerStrataRoutes(mux, d)
+	registerStrataDocumentRoutes(mux, d)
 	mux.Handle("POST /api/v1/orgs/{org}/properties",
 		d.Auth.RequireOrg(auth.PermPropertyWrite)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			createProperty(w, r, d)

@@ -52,13 +52,15 @@ type Seed struct {
 	Properties map[string]SeedProperty `yaml:"properties"`
 	// StrataSchemes are seeded before Properties, which may link to them.
 	StrataSchemes map[string]SeedStrataScheme `yaml:"strata_schemes"`
-	Leases        map[string]SeedLease        `yaml:"leases"`
-	Payments      map[string]SeedPayment      `yaml:"payments"`
-	Tickets       map[string]SeedTicket       `yaml:"tickets"`
-	Projects      map[string]SeedProject      `yaml:"projects"`
-	Tasks         map[string]SeedTask         `yaml:"tasks"`
-	Invites       map[string]SeedInvite       `yaml:"invites"`
-	Settings      map[string]SeedSettings     `yaml:"settings"` // key is the org slug
+	// StrataDocuments are seeded after StrataSchemes.
+	StrataDocuments map[string]SeedStrataDocument `yaml:"strata_documents"`
+	Leases          map[string]SeedLease          `yaml:"leases"`
+	Payments        map[string]SeedPayment        `yaml:"payments"`
+	Tickets         map[string]SeedTicket         `yaml:"tickets"`
+	Projects        map[string]SeedProject        `yaml:"projects"`
+	Tasks           map[string]SeedTask           `yaml:"tasks"`
+	Invites         map[string]SeedInvite         `yaml:"invites"`
+	Settings        map[string]SeedSettings       `yaml:"settings"` // key is the org slug
 }
 
 // SeedUser is a member of Org with Role. Contact (a seed contact name in
@@ -97,12 +99,37 @@ type SeedProperty struct {
 	StrataScheme string `yaml:"strata_scheme"`
 }
 
-// SeedStrataScheme is a strata scheme in Org with no positions held. CTS
-// is its optional community titles scheme number.
+// SeedStrataScheme is a strata scheme in Org holding Positions (any of
+// chairperson, secretary, treasurer). CTS is its optional community titles
+// scheme number.
 type SeedStrataScheme struct {
-	Org  string `yaml:"org"`
-	Name string `yaml:"name"`
-	CTS  string `yaml:"cts"`
+	Org       string   `yaml:"org"`
+	Name      string   `yaml:"name"`
+	CTS       string   `yaml:"cts"`
+	Positions []string `yaml:"positions"`
+}
+
+// StrataPositions are the positions a seed strata scheme may hold.
+var StrataPositions = []string{"chairperson", "secretary", "treasurer"}
+
+// StrataDocTypes and StrataDocStatuses are the values a seed strata
+// document may take (empty means minutes / pending).
+var (
+	StrataDocTypes    = []string{"minutes", "by_laws", "cms", "levy_notice", "budget", "financial_statement", "sinking_fund_forecast", "other"}
+	StrataDocStatuses = []string{"pending", "extracting", "indexed", "failed"}
+)
+
+// SeedStrataDocument is a document of the seed strata scheme Scheme (in
+// the scheme's org): a generated PDF of Pages pages (default 1), with
+// Type (default minutes), Title (default "AGM 2024"), Date (default
+// 2024-09-12) and Status (default pending).
+type SeedStrataDocument struct {
+	Scheme string `yaml:"scheme"`
+	Type   string `yaml:"type"`
+	Title  string `yaml:"title"`
+	Date   string `yaml:"date"`
+	Pages  int    `yaml:"pages"`
+	Status string `yaml:"status"`
 }
 
 // SeedLease is a lease on the seed property Property with the seed contact
@@ -273,6 +300,7 @@ func (s Seed) seedNames() map[string]string {
 	add("contacts", sortedKeys(s.Contacts))
 	add("invoices", sortedKeys(s.Invoices))
 	add("strata_schemes", sortedKeys(s.StrataSchemes))
+	add("strata_documents", sortedKeys(s.StrataDocuments))
 	add("properties", sortedKeys(s.Properties))
 	add("leases", sortedKeys(s.Leases))
 	add("payments", sortedKeys(s.Payments))
@@ -331,6 +359,7 @@ func (f File) Validate() error {
 		{"contacts", sortedKeys(s.Contacts)},
 		{"invoices", sortedKeys(s.Invoices)},
 		{"strata_schemes", sortedKeys(s.StrataSchemes)},
+		{"strata_documents", sortedKeys(s.StrataDocuments)},
 		{"properties", sortedKeys(s.Properties)},
 		{"leases", sortedKeys(s.Leases)},
 		{"payments", sortedKeys(s.Payments)},
@@ -396,7 +425,29 @@ func (f File) Validate() error {
 		}
 	}
 	for _, name := range sortedKeys(s.StrataSchemes) {
-		checkOrg("strata_schemes."+name, s.StrataSchemes[name].Org)
+		sc := s.StrataSchemes[name]
+		checkOrg("strata_schemes."+name, sc.Org)
+		for _, p := range sc.Positions {
+			if !slices.Contains(StrataPositions, p) {
+				seedErr("strata_schemes.%s: unknown position %q (known: %s)", name, p, strings.Join(StrataPositions, ", "))
+			}
+		}
+	}
+	for _, name := range sortedKeys(s.StrataDocuments) {
+		d := s.StrataDocuments[name]
+		where := "strata_documents." + name
+		if _, ok := s.StrataSchemes[d.Scheme]; !ok {
+			seedErr("%s: scheme: unknown strata scheme %q", where, d.Scheme)
+		}
+		if d.Type != "" && !slices.Contains(StrataDocTypes, d.Type) {
+			seedErr("%s: unknown type %q", where, d.Type)
+		}
+		if d.Status != "" && !slices.Contains(StrataDocStatuses, d.Status) {
+			seedErr("%s: unknown status %q", where, d.Status)
+		}
+		if d.Pages < 0 {
+			seedErr("%s: negative pages %d", where, d.Pages)
+		}
 	}
 	for _, name := range sortedKeys(s.Properties) {
 		p := s.Properties[name]

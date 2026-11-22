@@ -214,6 +214,16 @@ func TestValidateRejectsBadSeedAndCases(t *testing.T) {
 		{"strata scheme name collides", func(f *File) {
 			f.Seed.StrataSchemes = map[string]SeedStrataScheme{"owner": {Org: "acme", Name: "S"}}
 		}, []string{"owner", "duplicate"}},
+		{"unknown strata position", func(f *File) {
+			f.Seed.StrataSchemes = map[string]SeedStrataScheme{"s": {Org: "acme", Name: "S", Positions: []string{"president"}}}
+		}, []string{"strata_schemes.s", "president"}},
+		{"unknown strata document scheme", func(f *File) {
+			f.Seed.StrataDocuments = map[string]SeedStrataDocument{"d": {Scheme: "ghost"}}
+		}, []string{"strata_documents.d", "ghost"}},
+		{"bad strata document type and status", func(f *File) {
+			f.Seed.StrataSchemes = map[string]SeedStrataScheme{"s": {Org: "acme", Name: "S"}}
+			f.Seed.StrataDocuments = map[string]SeedStrataDocument{"d": {Scheme: "s", Type: "memo", Status: "done"}}
+		}, []string{"strata_documents.d", "memo", "done"}},
 		{"unknown lease property", func(f *File) {
 			f.Seed.Leases = map[string]SeedLease{"l": {Org: "other", Property: "p", Tenant: "c_foreign"}}
 		}, []string{"l", "p"}},

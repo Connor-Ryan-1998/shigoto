@@ -1,0 +1,118 @@
+# Strata document routes: list, download, reindex and delete, with
+# permissions, org/scheme isolation and the officer-position gate. Uploads
+# (multipart) are owned by
+# internal/property/routes_strata_documents_integration_test.go; store
+# rules by internal/property/strata_documents_integration_test.go.
+seed:
+  orgs: [acme, other]
+  users:
+    owner: {org: acme, role: owner}
+    keeper: {org: acme, role: bookkeeper}
+    other_owner: {org: other, role: owner}
+  strata_schemes:
+    s_chair: {org: acme, name: Harbour View CTS, positions: [chairperson]}
+    s_treas: {org: acme, name: Treasury CTS, positions: [treasurer]}
+    s_none: {org: acme, name: Plain CTS, positions: [secretary]}
+    s_other: {org: other, name: Elsewhere CTS, positions: [chairperson, treasurer]}
+  strata_documents:
+    d_agm: {scheme: s_chair, type: minutes, title: AGM 2024, date: "2024-09-12", pages: 3}
+    d_budget: {scheme: s_chair, type: budget, title: Budget FY25, date: "2024-07-01", status: failed}
+    d_none: {scheme: s_none, title: Old minutes}
+    d_other: {scheme: s_other, title: Their minutes}
+
+cases:
+  - name: readers list a scheme's documents, newest first
+    as: [owner, keeper]
+    request: {method: GET, path: "/api/v1/orgs/acme/strata-schemes/{s_chair}/documents"}
+    expect:
+      status: 200
+      body:
+        - id: "{d_agm}"
+          doc_type: minutes
+          title: AGM 2024
+          document_date: "2024-09-12"
+          status: pending
+          error: ""
+          page_count: 3
+          extract_model: ""
+          chunks_total: 0
+          chunks_embedded: 0
+        - id: "{d_budget}"
+          doc_type: budget
+          status: failed
+
+  - name: treasurer-only scheme lists documents
+    as: owner
+    request: {method: GET, path: "/api/v1/orgs/acme/strata-schemes/{s_treas}/documents"}
+    expect: {status: 200, body: []}
+
+  - name: scheme without chairperson or treasurer is forbidden
+    as: [owner, keeper]
+    request: {method: GET, path: "/api/v1/orgs/acme/strata-schemes/{s_none}/documents"}
+    expect: {status: 403, body: {error: the organisation holds no chairperson or treasurer position on this scheme}, exact: true}
+
+  - name: another org's scheme is not found
+    as: owner
+    request: {method: GET, path: "/api/v1/orgs/acme/strata-schemes/{s_other}/documents"}
+    expect: {status: 404, body: {error: not found}, exact: true}
+
+  - name: another org cannot list our scheme
+    as: other_owner
+    request: {method: GET, path: "/api/v1/orgs/other/strata-schemes/{s_chair}/documents"}
+    expect: {status: 404, body: {error: not found}, exact: true}
+
+  - name: anonymous cannot list
+    as: anonymous
+    request: {method: GET, path: "/api/v1/orgs/acme/strata-schemes/{s_chair}/documents"}
+    expect: {status: 401}
+
+  - name: readers download a document as PDF
+    as: [owner, keeper]
+    request: {method: GET, path: "/api/v1/orgs/acme/strata-schemes/{s_chair}/documents/{d_agm}/file"}
+    expect: {status: 200, headers: {Content-Type: application/pdf}}
+
+  - name: document of another scheme is not found through this scheme
+    as: owner
+    request: {method: GET, path: "/api/v1/orgs/acme/strata-schemes/{s_treas}/documents/{d_agm}/file"}
+    expect: {status: 404, body: {error: not found}, exact: true}
+
+  - name: document on a scheme without officer positions is forbidden
+    as: owner
+    request: {method: GET, path: "/api/v1/orgs/acme/strata-schemes/{s_none}/documents/{d_none}/file"}
+    expect: {status: 403, body: {error: the organisation holds no chairperson or treasurer position on this scheme}, exact: true}
+
+  - name: bookkeeper cannot reindex
+    as: keeper
+    request: {method: POST, path: "/api/v1/orgs/acme/strata-schemes/{s_chair}/documents/{d_budget}/reindex"}
+    expect: {status: 403}
+    unchanged: [strata_documents]
+
+  - name: owner reindexes a failed document
+    as: owner
+    isolate: true
+    request: {method: POST, path: "/api/v1/orgs/acme/strata-schemes/{s_chair}/documents/{d_budget}/reindex"}
+    expect: {status: 204}
+
+  - name: reindex of another scheme's document is not found
+    as: owner
+    request: {method: POST, path: "/api/v1/orgs/acme/strata-schemes/{s_treas}/documents/{d_budget}/reindex"}
+    expect: {status: 404, body: {error: not found}, exact: true}
+    unchanged: [strata_documents]
+
+  - name: bookkeeper cannot delete
+    as: keeper
+    request: {method: DELETE, path: "/api/v1/orgs/acme/strata-schemes/{s_chair}/documents/{d_agm}"}
+    expect: {status: 403}
+    unchanged: [strata_documents, files]
+
+  - name: owner deletes a document
+    as: owner
+    isolate: true
+    request: {method: DELETE, path: "/api/v1/orgs/acme/strata-schemes/{s_chair}/documents/{d_agm}"}
+    expect: {status: 204}
+
+  - name: another org cannot delete our document
+    as: other_owner
+    request: {method: DELETE, path: "/api/v1/orgs/other/strata-schemes/{s_other}/documents/{d_agm}"}
+    expect: {status: 404, body: {error: not found}, exact: true}
+    unchanged: [strata_documents, files]

@@ -22,6 +22,7 @@ import (
 	"shigoto/internal/billing"
 	"shigoto/internal/config"
 	"shigoto/internal/core"
+	"shigoto/internal/llm"
 	"shigoto/internal/storage"
 )
 
@@ -34,6 +35,12 @@ type Deps struct {
 	Billing *billing.Service
 	// Store holds uploaded file bytes.
 	Store storage.Store
+	// LLM is the strata assistant's model client; nil when the assistant
+	// is not configured.
+	LLM *llm.Client
+	// StrataKick wakes the strata document indexer after an upload or
+	// reindex. Nil is a no-op.
+	StrataKick func()
 }
 
 // Module is a feature module that contributes routes to the API, gated by

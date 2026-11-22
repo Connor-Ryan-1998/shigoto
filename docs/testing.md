@@ -66,8 +66,13 @@ cases:
 ```
 
 - **Seed kinds:** `orgs`, `modules`, `users`, `contacts`, `invoices`,
-  `strata_schemes`, `properties` (optional `strata_scheme` link), `leases`,
+  `strata_schemes` (optional `positions`), `strata_documents` (a generated
+  PDF on a seeded scheme; optional `type`, `title`, `date`, `pages`,
+  `status`), `properties` (optional `strata_scheme` link), `leases`,
   `projects`, `tasks`, `invites`, `settings`. The loader rejects unknown keys.
+- **Uploads** are multipart, which cases cannot send: test them in Go with
+  `testkit.Session.Upload` (e.g.
+  `internal/property/routes_strata_documents_integration_test.go`).
 - **Interpolation:** `{name}` becomes a seeded record's ID. An unknown name
   fails the load. There are no other expressions.
 - **Writes:** a case that expects a successful write must set
