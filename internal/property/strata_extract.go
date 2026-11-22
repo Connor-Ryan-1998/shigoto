@@ -42,11 +42,13 @@ type ExtractedFigure struct {
 	PageNo      int
 }
 
-// Extraction is everything read from one page batch.
+// Extraction is everything read from one page batch. Dropped counts
+// motions and figures discarded as unusable.
 type Extraction struct {
 	Pages   []ExtractedPage
 	Motions []ExtractedMotion
 	Figures []ExtractedFigure
+	Dropped int
 }
 
 var (
@@ -82,7 +84,7 @@ Rules:
 	case t == DocMinutes:
 		s.WriteString("\n- Report every motion put to the meeting, with the page it appears on.")
 	case t.Financial():
-		s.WriteString("\n- Report fund totals, levies, balances and arrears; amounts are strings exactly as printed, never JSON numbers.")
+		s.WriteString("\n- Report fund totals, levies, balances and arrears; amounts are strings exactly as printed (keep any CR/DR suffix; a dash means nil), never JSON numbers.")
 	}
 	return s.String()
 }
@@ -153,76 +155,92 @@ func ParseExtraction(raw []byte, t StrataDocType, b PageBatch) (Extraction, erro
 	}
 	slices.SortFunc(out.Pages, func(a, b ExtractedPage) int { return a.PageNo - b.PageNo })
 
-	if len(r.Motions) > 0 && t != DocMinutes {
-		return bad("motions are only extracted from minutes")
-	}
-	for i, m := range r.Motions {
+	// A motion or figure the model got wrong is dropped, not fatal: the
+	// page text (which search and citations rely on) is still good.
+	for _, m := range r.Motions {
 		date, err := time.Parse(time.DateOnly, m.MeetingDate)
-		switch {
-		case err != nil:
-			return bad("motion %d: meeting_date %q is not YYYY-MM-DD", i, m.MeetingDate)
-		case !slices.Contains(meetingKinds, m.MeetingKind):
-			return bad("motion %d: unknown meeting_kind %q", i, m.MeetingKind)
-		case !slices.Contains(motionOutcomes, m.Outcome):
-			return bad("motion %d: unknown outcome %q", i, m.Outcome)
-		case clean(m.Text) == "":
-			return bad("motion %d: motion text is blank", i)
-		case !inBatch(m.PageNo):
-			return bad("motion %d: page_no %d is outside pages %d-%d", i, m.PageNo, b.From, b.To)
+		if t != DocMinutes || err != nil || !slices.Contains(meetingKinds, m.MeetingKind) ||
+			!slices.Contains(motionOutcomes, m.Outcome) || clean(m.Text) == "" || !inBatch(m.PageNo) {
+			out.Dropped++
+			continue
 		}
 		out.Motions = append(out.Motions, ExtractedMotion{MeetingDate: date, MeetingKind: m.MeetingKind,
 			MotionNo: clean(m.MotionNo), Text: clean(m.Text), Outcome: m.Outcome, PageNo: m.PageNo})
 	}
-
-	if len(r.Figures) > 0 && !t.Financial() {
-		return bad("figures are only extracted from financial documents")
-	}
-	for i, f := range r.Figures {
-		if !slices.Contains(figureFunds, f.Fund) {
-			return bad("figure %d: unknown fund %q", i, f.Fund)
+	for _, f := range r.Figures {
+		fig, ok := parseFigure(f.Fund, f.Metric, f.Label, f.PeriodStart, f.PeriodEnd, f.Amount, f.PageNo)
+		if !t.Financial() || !ok || !inBatch(f.PageNo) {
+			out.Dropped++
+			continue
 		}
-		if !slices.Contains(figureMetrics, f.Metric) {
-			return bad("figure %d: unknown metric %q", i, f.Metric)
-		}
-		if clean(f.Label) == "" {
-			return bad("figure %d: label is blank", i)
-		}
-		end, err := time.Parse(time.DateOnly, f.PeriodEnd)
-		if err != nil {
-			return bad("figure %d: period_end %q is not YYYY-MM-DD", i, f.PeriodEnd)
-		}
-		var start *time.Time
-		if f.PeriodStart != nil {
-			s, err := time.Parse(time.DateOnly, *f.PeriodStart)
-			if err != nil {
-				return bad("figure %d: period_start %q is not YYYY-MM-DD", i, *f.PeriodStart)
-			}
-			start = &s
-		}
-		// Amounts must be JSON strings: a JSON number has already been
-		// through a float in the model's output and may be rounded.
-		var amount string
-		if err := json.Unmarshal(f.Amount, &amount); err != nil {
-			return bad("figure %d: amount must be a string as printed, got %s", i, string(f.Amount))
-		}
-		amount = strings.TrimSpace(amount)
-		if strings.HasPrefix(amount, "$(") {
-			amount = "(" + amount[2:]
-		}
-		if amount == "" {
-			return bad("figure %d: amount is blank", i)
-		}
-		cents, err := importers.ParseAmountCents(amount)
-		if err != nil {
-			return bad("figure %d: amount %q is not a money amount", i, amount)
-		}
-		if !inBatch(f.PageNo) {
-			return bad("figure %d: page_no %d is outside pages %d-%d", i, f.PageNo, b.From, b.To)
-		}
-		out.Figures = append(out.Figures, ExtractedFigure{Fund: f.Fund, Metric: f.Metric, Label: clean(f.Label),
-			PeriodStart: start, PeriodEnd: end, AmountCents: cents, PageNo: f.PageNo})
+		out.Figures = append(out.Figures, fig)
 	}
 	return out, nil
+}
+
+func parseFigure(fund, metric, label string, periodStart *string, periodEnd string, rawAmount json.RawMessage, page int) (ExtractedFigure, bool) {
+	if !slices.Contains(figureFunds, fund) || !slices.Contains(figureMetrics, metric) || clean(label) == "" {
+		return ExtractedFigure{}, false
+	}
+	end, err := time.Parse(time.DateOnly, periodEnd)
+	if err != nil {
+		return ExtractedFigure{}, false
+	}
+	var start *time.Time
+	if periodStart != nil {
+		s, err := time.Parse(time.DateOnly, *periodStart)
+		if err != nil {
+			return ExtractedFigure{}, false
+		}
+		start = &s
+	}
+	// Amounts must be JSON strings: a JSON number has already been through
+	// a float in the model's output and may be rounded.
+	var amount string
+	if err := json.Unmarshal(rawAmount, &amount); err != nil {
+		return ExtractedFigure{}, false
+	}
+	cents, ok := parseStrataAmount(amount)
+	if !ok {
+		return ExtractedFigure{}, false
+	}
+	return ExtractedFigure{Fund: fund, Metric: metric, Label: clean(label), PeriodStart: start, PeriodEnd: end,
+		AmountCents: cents, PageNo: page}, true
+}
+
+// parseStrataAmount reads an amount as printed in a StrataMax statement:
+// "1,234.50", "(1,200.00)", "$(1,200.00)", a dash or "nil" for zero, and a
+// CR (credit, negative) or DR (debit, positive) suffix.
+func parseStrataAmount(raw string) (core.Cents, bool) {
+	s := clean(raw)
+	switch strings.ToLower(s) {
+	case "-", "–", "—", "nil":
+		return 0, true
+	case "":
+		return 0, false
+	}
+	neg := false
+	upper := strings.ToUpper(s)
+	switch {
+	case strings.HasSuffix(upper, "CR"):
+		neg, s = true, strings.TrimSpace(s[:len(s)-2])
+	case strings.HasSuffix(upper, "DR"):
+		s = strings.TrimSpace(s[:len(s)-2])
+	}
+	if strings.HasPrefix(s, "$(") {
+		s = "(" + s[2:]
+	}
+	if s == "" {
+		return 0, false
+	}
+	cents, err := importers.ParseAmountCents(s)
+	if err != nil {
+		return 0, false
+	}
+	if neg {
+		cents = -cents
+	}
+	return cents, true
 }
 
 // Chunk is a searchable span of one page's text.

@@ -17,6 +17,7 @@ type extractCase struct {
 	Raw   string `yaml:"raw"`
 	Want  *struct {
 		Pages   []int    `yaml:"pages"`
+		Dropped int      `yaml:"dropped"`
 		Texts   []string `yaml:"texts"`
 		Motions []struct {
 			MotionNo    string `yaml:"motion_no"`
@@ -59,6 +60,9 @@ func TestParseExtractionTable(t *testing.T) {
 			}
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
+			}
+			if got.Dropped != c.Want.Dropped {
+				t.Errorf("dropped = %d, want %d", got.Dropped, c.Want.Dropped)
 			}
 			if len(got.Pages) != len(c.Want.Pages) {
 				t.Fatalf("pages = %+v, want %v", got.Pages, c.Want.Pages)

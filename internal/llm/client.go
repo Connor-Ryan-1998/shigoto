@@ -81,7 +81,7 @@ type ChatRequest struct {
 	Tools       []Tool
 	ToolChoice  string // "", "auto" or "none"
 	JSONObject  bool
-	Temperature float64
+	Temperature float64 // 0 = omit (provider default)
 	Timeout     time.Duration
 }
 
@@ -246,7 +246,12 @@ func (c *Client) Chat(ctx context.Context, r ChatRequest) (ChatResponse, error) 
 		}
 		msgs[i] = wm
 	}
-	body := map[string]any{"model": r.Model, "messages": msgs, "temperature": r.Temperature}
+	body := map[string]any{"model": r.Model, "messages": msgs}
+	// Zero means "provider default": some reasoning models reject any
+	// explicit temperature.
+	if r.Temperature != 0 {
+		body["temperature"] = r.Temperature
+	}
 	if len(r.Tools) > 0 {
 		tools := make([]wireTool, len(r.Tools))
 		for i, t := range r.Tools {

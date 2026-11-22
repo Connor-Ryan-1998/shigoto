@@ -247,3 +247,22 @@ func TestModelNames(t *testing.T) {
 		t.Fatalf("models = %q %q %q", c.Model(), c.ExtractModel(), c.PDFMode())
 	}
 }
+
+func TestChatOmitsZeroTemperature(t *testing.T) {
+	// Some reasoning models reject any explicit temperature; the default
+	// (zero) must leave the provider's own default in place.
+	c, f := newClient(t, "")
+	f.QueueChat(llmtest.ChatScript{Content: "a"}, llmtest.ChatScript{Content: "b"})
+	if _, err := c.Chat(context.Background(), llm.ChatRequest{Model: "m", Messages: []llm.Message{userText("x")}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := f.Requests("/chat/completions")[0].JSON(t)["temperature"]; ok {
+		t.Fatal("temperature sent when zero")
+	}
+	if _, err := c.Chat(context.Background(), llm.ChatRequest{Model: "m", Messages: []llm.Message{userText("x")}, Temperature: 0.3}); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.Requests("/chat/completions")[1].JSON(t)["temperature"]; got != 0.3 {
+		t.Fatalf("temperature = %v, want 0.3", got)
+	}
+}

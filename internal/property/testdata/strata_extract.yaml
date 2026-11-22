@@ -1,7 +1,9 @@
 # ParseExtraction(raw, type, batch) cases. `batch` is [from, to]. Each case
 # has exactly one of `want` or `err` (a substring of the error, which must
-# also wrap core.ErrInvalidInput). want.pages lists the page numbers in
-# order; motions and figures list the fields checked.
+# also wrap core.ErrInvalidInput). Only reply-level problems (not JSON,
+# wrong page coverage) are errors; an unusable motion or figure is dropped
+# and counted in want.dropped (default 0). want.pages lists the page
+# numbers in order; motions and figures list the fields checked.
 - name: valid minutes with a motion
   type: minutes
   batch: [1, 2]
@@ -49,11 +51,11 @@
   raw: '{"pages":[{"page_no":1,"text":"   "}]}'
   want: {pages: [1], texts: [""]}
 
-- name: motion on a budget is rejected
+- name: motion on a budget is dropped
   type: budget
   batch: [1, 1]
   raw: '{"pages":[{"page_no":1,"text":"a"}],"motions":[{"meeting_date":"2024-09-12","meeting_kind":"agm","text":"x","outcome":"carried","page_no":1}]}'
-  err: motions
+  want: {pages: [1], dropped: 1}
 
 - name: empty motions list on a budget is fine
   type: budget
@@ -61,29 +63,29 @@
   raw: '{"pages":[{"page_no":1,"text":"a"}],"motions":[],"figures":[]}'
   want: {pages: [1]}
 
-- name: figure on minutes is rejected
+- name: figure on minutes is dropped
   type: minutes
   batch: [1, 1]
   raw: '{"pages":[{"page_no":1,"text":"a"}],"figures":[{"fund":"admin","metric":"levy","label":"x","period_end":"2025-06-30","amount":"1.00","page_no":1}]}'
-  err: figures
+  want: {pages: [1], dropped: 1}
 
-- name: unknown motion outcome
+- name: unknown motion outcome drops the motion
   type: minutes
   batch: [1, 1]
   raw: '{"pages":[{"page_no":1,"text":"a"}],"motions":[{"meeting_date":"2024-09-12","meeting_kind":"agm","text":"x","outcome":"passed","page_no":1}]}'
-  err: passed
+  want: {pages: [1], dropped: 1}
 
-- name: blank motion text
+- name: blank motion text drops the motion
   type: minutes
   batch: [1, 1]
   raw: '{"pages":[{"page_no":1,"text":"a"}],"motions":[{"meeting_date":"2024-09-12","meeting_kind":"agm","text":"  ","outcome":"carried","page_no":1}]}'
-  err: motion text
+  want: {pages: [1], dropped: 1}
 
-- name: bad motion date
+- name: unreadable motion date drops the motion
   type: minutes
   batch: [1, 1]
   raw: '{"pages":[{"page_no":1,"text":"a"}],"motions":[{"meeting_date":"12/09/2024","meeting_kind":"agm","text":"x","outcome":"carried","page_no":1}]}'
-  err: meeting_date
+  want: {pages: [1], dropped: 1}
 
 - name: amounts parse to exact cents
   type: financial_statement
@@ -101,41 +103,41 @@
       - {label: Deficit, amount_cents: -120000, period_start: "", period_end: "2025-06-30", page_no: 2}
       - {label: Round, amount_cents: 9900, period_start: "", period_end: "2025-06-30", page_no: 2}
 
-- name: numeric amount rejected
+- name: numeric amount drops the figure (never stored via a float)
   type: budget
   batch: [1, 1]
   raw: '{"pages":[{"page_no":1,"text":"a"}],"figures":[{"fund":"admin","metric":"levy","label":"x","period_end":"2025-06-30","amount":1234.5,"page_no":1}]}'
-  err: amount
+  want: {pages: [1], dropped: 1}
 
-- name: blank amount rejected
+- name: blank amount drops the figure
   type: budget
   batch: [1, 1]
   raw: '{"pages":[{"page_no":1,"text":"a"}],"figures":[{"fund":"admin","metric":"levy","label":"x","period_end":"2025-06-30","amount":"","page_no":1}]}'
-  err: amount
+  want: {pages: [1], dropped: 1}
 
-- name: three decimal places rejected
+- name: three decimal places drops the figure
   type: budget
   batch: [1, 1]
   raw: '{"pages":[{"page_no":1,"text":"a"}],"figures":[{"fund":"admin","metric":"levy","label":"x","period_end":"2025-06-30","amount":"1.005","page_no":1}]}'
-  err: amount
+  want: {pages: [1], dropped: 1}
 
-- name: figure page outside batch
+- name: figure page outside batch drops the figure
   type: budget
   batch: [1, 5]
   raw: '{"pages":[{"page_no":1,"text":"a"},{"page_no":2,"text":"a"},{"page_no":3,"text":"a"},{"page_no":4,"text":"a"},{"page_no":5,"text":"a"}],"figures":[{"fund":"admin","metric":"levy","label":"x","period_end":"2025-06-30","amount":"1.00","page_no":9}]}'
-  err: page_no 9
+  want: {pages: [1, 2, 3, 4, 5], dropped: 1}
 
-- name: unknown fund
+- name: unknown fund drops the figure
   type: levy_notice
   batch: [1, 1]
   raw: '{"pages":[{"page_no":1,"text":"a"}],"figures":[{"fund":"reserve","metric":"levy","label":"x","period_end":"2025-06-30","amount":"1.00","page_no":1}]}'
-  err: reserve
+  want: {pages: [1], dropped: 1}
 
-- name: missing period end
+- name: missing period end drops the figure
   type: levy_notice
   batch: [1, 1]
   raw: '{"pages":[{"page_no":1,"text":"a"}],"figures":[{"fund":"admin","metric":"levy","label":"x","amount":"1.00","page_no":1}]}'
-  err: period_end
+  want: {pages: [1], dropped: 1}
 
 - name: not JSON
   type: minutes
@@ -151,3 +153,22 @@
     pages: [1]
     texts: ["Roof repairs"]
     motions: [{motion_no: "5", outcome: carried, page_no: 1, meeting_date: "2024-09-12", meeting_kind: agm}]
+
+- name: nil and credit/debit notation
+  type: financial_statement
+  batch: [1, 1]
+  raw: |
+    {"pages":[{"page_no":1,"text":"a"}],"figures":[
+      {"fund":"admin","metric":"arrears","label":"Dash","period_end":"2025-06-30","amount":"-","page_no":1},
+      {"fund":"admin","metric":"arrears","label":"Em dash","period_end":"2025-06-30","amount":"—","page_no":1},
+      {"fund":"admin","metric":"arrears","label":"Nil","period_end":"2025-06-30","amount":"Nil","page_no":1},
+      {"fund":"admin","metric":"arrears","label":"Credit","period_end":"2025-06-30","amount":"1,234.50 CR","page_no":1},
+      {"fund":"admin","metric":"arrears","label":"Debit","period_end":"2025-06-30","amount":"$80.00DR","page_no":1}]}
+  want:
+    pages: [1]
+    figures:
+      - {label: Dash, amount_cents: 0, period_start: "", period_end: "2025-06-30", page_no: 1}
+      - {label: Em dash, amount_cents: 0, period_start: "", period_end: "2025-06-30", page_no: 1}
+      - {label: Nil, amount_cents: 0, period_start: "", period_end: "2025-06-30", page_no: 1}
+      - {label: Credit, amount_cents: -123450, period_start: "", period_end: "2025-06-30", page_no: 1}
+      - {label: Debit, amount_cents: 8000, period_start: "", period_end: "2025-06-30", page_no: 1}

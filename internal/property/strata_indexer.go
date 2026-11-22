@@ -218,6 +218,10 @@ func (x *StrataIndexer) extractBatch(ctx context.Context, doc StrataDocument, b 
 		}
 		ext, err := ParseExtraction([]byte(resp.Content), doc.DocType, b)
 		if err == nil {
+			if ext.Dropped > 0 {
+				slog.Warn("strata extraction dropped unusable motions or figures", "document_id", doc.ID,
+					"pages", fmt.Sprintf("%d-%d", b.From, b.To), "dropped", ext.Dropped)
+			}
 			return ext, nil
 		}
 		lastErr = err
