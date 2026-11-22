@@ -65,7 +65,15 @@ task test SUITE=integration  # brings up db via docker compose, then integration
 task build                   # builds bin/shigoto (includes task web:build)
 task dev                     # runs db in docker compose, then the server locally
 task lint                    # gofmt -l, go vet, and task web:check
+```
 
+The database is PostgreSQL 18 Alpine with pgvector, built from
+`deploy/postgres/Dockerfile` (CI publishes it as
+`ghcr.io/connor-ryan-1998/shigoto-postgres`). Keep `PGVECTOR_VERSION` in that
+Dockerfile and in `.github/workflows/validate.yml` in step. After changing
+either pin, rebuild locally with `docker compose build db`.
+
+```bash
 task web:install              # npm ci in web/
 task web:build                # builds the SPA into internal/webui/dist
 task web:test                 # svelte-check plus vitest (--run)
