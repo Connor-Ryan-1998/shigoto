@@ -27,6 +27,8 @@ import (
 	"shigoto/internal/core"
 	"shigoto/internal/db"
 	"shigoto/internal/httpapi"
+	"shigoto/internal/llm"
+	"shigoto/internal/property"
 	"shigoto/internal/scheduler"
 )
 
@@ -218,6 +220,19 @@ func serve() error {
 		return fmt.Errorf("opening file store: %w", err)
 	}
 	deps := httpapi.Deps{Pool: pool, Auth: a, Cfg: cfg, Store: store}
+	// The strata assistant's indexer is woken by uploads through kick.
+	var strataIndexer *property.StrataIndexer
+	kick := make(chan struct{}, 1)
+	if cfg.LLM != nil {
+		deps.LLM = llm.New(*cfg.LLM, cfg.Embed, &http.Client{})
+		deps.StrataKick = func() {
+			select {
+			case kick <- struct{}{}:
+			default:
+			}
+		}
+		strataIndexer = &property.StrataIndexer{Pool: pool, Store: store, LLM: deps.LLM}
+	}
 	billingSvc := httpapi.DefaultBilling(deps)
 	deps.Billing = billingSvc
 	handler := httpapi.New(deps)
@@ -249,6 +264,13 @@ func serve() error {
 				Store:           store,
 			}, time.Hour, time.Now)
 		}()
+		if strataIndexer != nil && cfg.Modules["property"] {
+			schedWG.Add(1)
+			go func() {
+				defer schedWG.Done()
+				strataIndexer.Run(schedCtx, 30*time.Second, kick)
+			}()
+		}
 	}
 
 	errCh := make(chan error, 1)
