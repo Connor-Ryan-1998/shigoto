@@ -27,6 +27,7 @@ var FileReferences = []struct{ Table, Column string }{
 	{"insurance_policies", "file_id"},
 	{"depreciation_documents", "file_id"},
 	{"maintenance_ticket_files", "file_id"},
+	{"strata_documents", "file_id"},
 }
 
 // unreferencedClause is the WHERE condition that no FileReferences column
