@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"regexp"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -347,5 +348,43 @@ func TestIndexerReindexDuringExtractionIsNotOverwritten(t *testing.T) {
 	}
 	if n := w.e.Count("strata_document_pages", "document_id = $1", doc.ID); n != 0 {
 		t.Fatalf("stale extraction written: %d pages", n)
+	}
+}
+
+func TestIndexerResetsOrphanedExtractionOnTick(t *testing.T) {
+	// An instance that died mid-extraction while another held startup
+	// recovery leaves a row "extracting"; the next tick (holding the lock,
+	// so no live owner exists) must pick it up.
+	w := newIndexerWorld(t)
+	w.fake.ChatFunc(validExtraction)
+	doc := w.e.StrataDocument(w.store, w.org, w.scheme.ID)
+	if _, err := w.e.Pool.Exec(w.e.Ctx, `UPDATE strata_documents SET status = 'extracting' WHERE id = $1`, doc.ID); err != nil {
+		t.Fatal(err)
+	}
+	w.tick(t, w.indexer(""))
+	if got := w.doc(t, doc.ID); got.Status != property.DocIndexed {
+		t.Fatalf("status = %s, want indexed", got.Status)
+	}
+}
+
+func TestIndexerSaveFailureRecordsFailure(t *testing.T) {
+	w := newIndexerWorld(t)
+	w.fake.ChatFunc(validExtraction)
+	doc := w.e.StrataDocument(w.store, w.org, w.scheme.ID)
+	// Make storing pages fail, as a database error would.
+	for _, sql := range []string{
+		`CREATE FUNCTION fail_pages() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'disk full'; END $$`,
+		`CREATE TRIGGER fail_pages BEFORE INSERT ON strata_document_pages FOR EACH ROW EXECUTE FUNCTION fail_pages()`,
+	} {
+		if _, err := w.e.Pool.Exec(w.e.Ctx, sql); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := w.indexer("").Tick(w.e.Ctx); err != nil {
+		t.Fatalf("Tick: %v (a save failure is recorded on the document, not returned)", err)
+	}
+	got := w.doc(t, doc.ID)
+	if got.Status != property.DocFailed || got.Attempts != 1 || got.NextAttemptAt == nil || got.Error == "" || strings.Contains(got.Error, "disk full") {
+		t.Fatalf("doc = %+v, want a retryable failure without database detail", got)
 	}
 }

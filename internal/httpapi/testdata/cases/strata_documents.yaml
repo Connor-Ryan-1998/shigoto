@@ -69,7 +69,15 @@ cases:
   - name: readers download a document as PDF
     as: [owner, keeper]
     request: {method: GET, path: "/api/v1/orgs/acme/strata-schemes/{s_chair}/documents/{d_agm}/file"}
-    expect: {status: 200, headers: {Content-Type: application/pdf}}
+    # Inline, so citation links (#page=N) open the browser's PDF viewer at
+    # the cited page; frame-ancestors stops other sites framing it.
+    expect:
+      status: 200
+      headers:
+        Content-Type: application/pdf
+        Content-Disposition: inline; filename="doc.pdf"
+        Content-Security-Policy: frame-ancestors 'none'
+        X-Content-Type-Options: nosniff
 
   - name: document of another scheme is not found through this scheme
     as: owner

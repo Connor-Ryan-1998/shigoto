@@ -107,6 +107,11 @@ func (x *StrataIndexer) Run(ctx context.Context, every time.Duration, kick <-cha
 // database failures; model failures are recorded on the document.
 func (x *StrataIndexer) Tick(ctx context.Context) error {
 	return x.withLock(ctx, func() error {
+		// Holding the lock means no live tick owns an "extracting" row:
+		// any left over is from an instance that stopped mid-read.
+		if _, err := x.Pool.Exec(ctx, `UPDATE strata_documents SET status = 'pending' WHERE status = 'extracting'`); err != nil {
+			return fmt.Errorf("resetting orphaned strata extractions: %w", err)
+		}
 		doc, ok, err := x.claim(ctx)
 		if err != nil {
 			return fmt.Errorf("claiming strata document: %w", err)
@@ -148,8 +153,17 @@ func (x *StrataIndexer) process(ctx context.Context, doc StrataDocument) error {
 		}
 		return x.recordFailure(ctx, doc, err)
 	}
-	return x.save(ctx, doc, ext)
+	if err := x.save(ctx, doc, ext); err != nil {
+		if ctx.Err() != nil {
+			return nil
+		}
+		return x.recordFailure(ctx, doc, fmt.Errorf("%w: %v", errStrataSave, err))
+	}
+	return nil
 }
+
+// errStrataSave marks a failure storing an extraction; it is retried.
+var errStrataSave = errors.New("storing the extraction failed")
 
 func (x *StrataIndexer) extract(ctx context.Context, doc StrataDocument) (Extraction, error) {
 	f, err := core.GetFile(ctx, x.Pool, doc.OrgID, doc.FileID)
@@ -220,6 +234,8 @@ func failureMessage(err error) string {
 		return "The model provider is unavailable (HTTP " + strconv.Itoa(re.Status) + ")."
 	case errors.As(err, &re):
 		return "The model provider could not be reached."
+	case errors.Is(err, errStrataSave):
+		return "Saving what was read failed; it will be retried."
 	case errors.Is(err, llm.ErrPermanent):
 		return "The model provider rejected the request; check the model settings."
 	case errors.Is(err, core.ErrInvalidInput):
@@ -237,8 +253,13 @@ func (x *StrataIndexer) recordFailure(ctx context.Context, doc StrataDocument, c
 	attempts := doc.Attempts + 1
 	var next *time.Time
 	var re *llm.RetryableError
-	if errors.As(cause, &re) && attempts < StrataMaxAttempts {
-		delay := max(re.RetryAfter, strataRetryBase<<(attempts-1))
+	retryable := errors.As(cause, &re) || errors.Is(cause, errStrataSave)
+	if retryable && attempts < StrataMaxAttempts {
+		var hint time.Duration
+		if re != nil {
+			hint = re.RetryAfter
+		}
+		delay := max(hint, strataRetryBase<<(attempts-1))
 		t := x.now().Add(delay)
 		next = &t
 	} else {

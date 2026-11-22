@@ -142,3 +142,12 @@
   batch: [1, 1]
   raw: 'Here are the pages you asked for'
   err: JSON
+
+- name: NUL characters are removed from text
+  type: minutes
+  batch: [1, 1]
+  raw: '{"pages":[{"page_no":1,"text":"Roof\u0000 repairs"}],"motions":[{"meeting_date":"2024-09-12","meeting_kind":"agm","motion_no":"5\u0000","text":"Fix\u0000 roof","outcome":"carried","page_no":1}]}'
+  want:
+    pages: [1]
+    texts: ["Roof repairs"]
+    motions: [{motion_no: "5", outcome: carried, page_no: 1, meeting_date: "2024-09-12", meeting_kind: agm}]

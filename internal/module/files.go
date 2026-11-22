@@ -182,3 +182,26 @@ func ServeFile(w http.ResponseWriter, r *http.Request, store storage.Store, f co
 	w.Header().Set("Content-Disposition", disposition+`; filename="`+SanitizeFilename(f.OriginalName)+`"`)
 	http.ServeContent(w, r, "", f.CreatedAt, blob)
 }
+
+// ServePDFInline serves a PDF inline so the browser's own viewer opens it
+// (and honours a #page=N fragment). CSP sandbox, which ServeFile uses,
+// stops Chrome's viewer rendering, so this sets frame-ancestors 'none'
+// instead: the PDF opens top-level only, never framed by another page.
+// A file that is not a PDF falls back to ServeFile's attachment download.
+func ServePDFInline(w http.ResponseWriter, r *http.Request, store storage.Store, f core.File) {
+	if f.MIME != "application/pdf" {
+		ServeFile(w, r, store, f, false)
+		return
+	}
+	blob, err := core.OpenFile(r.Context(), store, f)
+	if err != nil {
+		WriteCoreError(w, fmt.Errorf("opening stored file: %w", err))
+		return
+	}
+	defer blob.Close()
+	w.Header().Set("Content-Type", f.MIME)
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Content-Security-Policy", "frame-ancestors 'none'")
+	w.Header().Set("Content-Disposition", `inline; filename="`+SanitizeFilename(f.OriginalName)+`"`)
+	http.ServeContent(w, r, "", f.CreatedAt, blob)
+}

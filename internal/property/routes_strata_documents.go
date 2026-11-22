@@ -219,7 +219,7 @@ func downloadStrataDocumentHandler(w http.ResponseWriter, r *http.Request, d mod
 		module.WriteCoreError(w, err)
 		return
 	}
-	module.ServeFile(w, r, d.Store, f, false)
+	module.ServePDFInline(w, r, d.Store, f)
 }
 
 func reindexStrataDocumentHandler(w http.ResponseWriter, r *http.Request, d module.Deps, scheme StrataScheme) {

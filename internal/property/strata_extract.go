@@ -119,6 +119,9 @@ type rawExtraction struct {
 	} `json:"figures"`
 }
 
+// clean removes NUL characters (which Postgres text rejects) and trims s.
+func clean(s string) string { return strings.TrimSpace(strings.ReplaceAll(s, "\x00", "")) }
+
 // ParseExtraction validates the extraction model's reply for page batch b
 // of a document of type t. Any violation is core.ErrInvalidInput.
 func ParseExtraction(raw []byte, t StrataDocType, b PageBatch) (Extraction, error) {
@@ -141,7 +144,7 @@ func ParseExtraction(raw []byte, t StrataDocType, b PageBatch) (Extraction, erro
 			return bad("page %d appears twice", p.PageNo)
 		}
 		seen[p.PageNo] = true
-		out.Pages = append(out.Pages, ExtractedPage{PageNo: p.PageNo, Text: strings.TrimSpace(p.Text)})
+		out.Pages = append(out.Pages, ExtractedPage{PageNo: p.PageNo, Text: clean(p.Text)})
 	}
 	for p := b.From; p <= b.To; p++ {
 		if !seen[p] {
@@ -162,13 +165,13 @@ func ParseExtraction(raw []byte, t StrataDocType, b PageBatch) (Extraction, erro
 			return bad("motion %d: unknown meeting_kind %q", i, m.MeetingKind)
 		case !slices.Contains(motionOutcomes, m.Outcome):
 			return bad("motion %d: unknown outcome %q", i, m.Outcome)
-		case strings.TrimSpace(m.Text) == "":
+		case clean(m.Text) == "":
 			return bad("motion %d: motion text is blank", i)
 		case !inBatch(m.PageNo):
 			return bad("motion %d: page_no %d is outside pages %d-%d", i, m.PageNo, b.From, b.To)
 		}
 		out.Motions = append(out.Motions, ExtractedMotion{MeetingDate: date, MeetingKind: m.MeetingKind,
-			MotionNo: strings.TrimSpace(m.MotionNo), Text: strings.TrimSpace(m.Text), Outcome: m.Outcome, PageNo: m.PageNo})
+			MotionNo: clean(m.MotionNo), Text: clean(m.Text), Outcome: m.Outcome, PageNo: m.PageNo})
 	}
 
 	if len(r.Figures) > 0 && !t.Financial() {
@@ -181,7 +184,7 @@ func ParseExtraction(raw []byte, t StrataDocType, b PageBatch) (Extraction, erro
 		if !slices.Contains(figureMetrics, f.Metric) {
 			return bad("figure %d: unknown metric %q", i, f.Metric)
 		}
-		if strings.TrimSpace(f.Label) == "" {
+		if clean(f.Label) == "" {
 			return bad("figure %d: label is blank", i)
 		}
 		end, err := time.Parse(time.DateOnly, f.PeriodEnd)
@@ -216,7 +219,7 @@ func ParseExtraction(raw []byte, t StrataDocType, b PageBatch) (Extraction, erro
 		if !inBatch(f.PageNo) {
 			return bad("figure %d: page_no %d is outside pages %d-%d", i, f.PageNo, b.From, b.To)
 		}
-		out.Figures = append(out.Figures, ExtractedFigure{Fund: f.Fund, Metric: f.Metric, Label: strings.TrimSpace(f.Label),
+		out.Figures = append(out.Figures, ExtractedFigure{Fund: f.Fund, Metric: f.Metric, Label: clean(f.Label),
 			PeriodStart: start, PeriodEnd: end, AmountCents: cents, PageNo: f.PageNo})
 	}
 	return out, nil
