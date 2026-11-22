@@ -15,6 +15,8 @@ import (
 	"shigoto/internal/auth"
 	"shigoto/internal/core"
 	"shigoto/internal/httpapi/casefile"
+	"shigoto/internal/llm"
+	"shigoto/internal/llm/llmtest"
 	"shigoto/internal/property"
 	"shigoto/internal/storage"
 	"shigoto/internal/testkit"
@@ -269,7 +271,14 @@ func seedCaseWorld(t *testing.T, s casefile.Seed) *caseWorld {
 		ids[name] = e.Invite(orgs[inv.Org], inv.Email, auth.Role(inv.Role), inv.Token, opts...)
 	}
 
-	h := e.Handler(testkit.Modules(s.Modules), testkit.Store(store))
+	opts := []testkit.HandlerOption{testkit.Modules(s.Modules), testkit.Store(store)}
+	if s.Assistant != nil {
+		fake := llmtest.New(t)
+		reply := s.Assistant.Reply
+		fake.ChatFunc(func(map[string]any) llmtest.ChatScript { return llmtest.ChatScript{Content: reply} })
+		opts = append(opts, testkit.WithLLM(llm.New(fake.LLMConfig(), nil, http.DefaultClient), fake.LLMConfig()))
+	}
+	h := e.Handler(opts...)
 	tokens := map[string]string{casefile.Anonymous: ""}
 	for _, name := range sortedKeys(users) {
 		tokens[name] = e.Login(users[name], h).Token

@@ -61,6 +61,14 @@ type Seed struct {
 	Tasks           map[string]SeedTask           `yaml:"tasks"`
 	Invites         map[string]SeedInvite         `yaml:"invites"`
 	Settings        map[string]SeedSettings       `yaml:"settings"` // key is the org slug
+	// Assistant, when set, configures the strata assistant against a
+	// scripted model that answers every request with Reply.
+	Assistant *SeedAssistant `yaml:"assistant"`
+}
+
+// SeedAssistant enables the strata assistant with a fixed model reply.
+type SeedAssistant struct {
+	Reply string `yaml:"reply"`
 }
 
 // SeedUser is a member of Org with Role. Contact (a seed contact name in
@@ -432,6 +440,9 @@ func (f File) Validate() error {
 				seedErr("strata_schemes.%s: unknown position %q (known: %s)", name, p, strings.Join(StrataPositions, ", "))
 			}
 		}
+	}
+	if s.Assistant != nil && s.Assistant.Reply == "" {
+		seedErr("assistant: reply is required")
 	}
 	for _, name := range sortedKeys(s.StrataDocuments) {
 		d := s.StrataDocuments[name]

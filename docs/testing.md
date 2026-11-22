@@ -69,7 +69,9 @@ cases:
   `strata_schemes` (optional `positions`), `strata_documents` (a generated
   PDF on a seeded scheme; optional `type`, `title`, `date`, `pages`,
   `status`), `properties` (optional `strata_scheme` link), `leases`,
-  `projects`, `tasks`, `invites`, `settings`. The loader rejects unknown keys.
+  `projects`, `tasks`, `invites`, `settings`, and `assistant: {reply: ...}`
+  (enables the strata assistant against a scripted model that always gives
+  `reply`). The loader rejects unknown keys.
 - **Uploads** are multipart, which cases cannot send: test them in Go with
   `testkit.Session.Upload` (e.g.
   `internal/property/routes_strata_documents_integration_test.go`).

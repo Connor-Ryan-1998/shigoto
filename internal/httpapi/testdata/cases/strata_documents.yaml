@@ -116,3 +116,8 @@ cases:
     request: {method: DELETE, path: "/api/v1/orgs/other/strata-schemes/{s_other}/documents/{d_agm}"}
     expect: {status: 404, body: {error: not found}, exact: true}
     unchanged: [strata_documents, files]
+
+  - name: asking without a configured assistant is unavailable
+    as: owner
+    request: {method: POST, path: "/api/v1/orgs/acme/strata-schemes/{s_chair}/ask", body: {role: chairperson, question: "roof?"}}
+    expect: {status: 503, body: {error: strata assistant is not configured}, exact: true}

@@ -7,12 +7,16 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"strings"
+	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 
 	"shigoto/internal/auth"
 	"shigoto/internal/core"
+	"shigoto/internal/llm"
 	"shigoto/internal/module"
 )
 
@@ -37,6 +41,10 @@ func registerStrataDocumentRoutes(mux *http.ServeMux, d module.Deps) {
 	handle("GET "+base+"/{doc}/file", auth.PermPropertyRead, downloadStrataDocumentHandler)
 	handle("POST "+base+"/{doc}/reindex", auth.PermPropertyWrite, reindexStrataDocumentHandler)
 	handle("DELETE "+base+"/{doc}", auth.PermPropertyWrite, deleteStrataDocumentHandler)
+	mux.Handle("POST /api/v1/orgs/{org}/strata-schemes/{id}/ask",
+		d.Auth.RequireOrg(auth.PermPropertyRead)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			askStrataHandler(w, r, d)
+		})))
 }
 
 // requireStrataOfficer loads path scheme {id} of the request's org (404
@@ -255,4 +263,91 @@ func deleteStrataDocumentHandler(w http.ResponseWriter, r *http.Request, d modul
 		}
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// strataQuestionMax caps a question's length in characters.
+const strataQuestionMax = 2000
+
+// askingUsers holds the users with a question running: each user may have
+// one at a time.
+var askingUsers sync.Map
+
+type askRequest struct {
+	Role     string `json:"role"`
+	Question string `json:"question"`
+}
+
+type citationResponse struct {
+	DocumentID   int64  `json:"document_id"`
+	Title        string `json:"title"`
+	DocumentDate string `json:"document_date"`
+	PageNo       int    `json:"page_no"`
+}
+
+type askResponse struct {
+	Answer    string             `json:"answer"`
+	Citations []citationResponse `json:"citations"`
+	Grounded  bool               `json:"grounded"`
+}
+
+func askStrataHandler(w http.ResponseWriter, r *http.Request, d module.Deps) {
+	if d.LLM == nil {
+		module.WriteError(w, http.StatusServiceUnavailable, "strata assistant is not configured")
+		return
+	}
+	id, ok := module.PathID(r)
+	if !ok {
+		module.WriteError(w, http.StatusNotFound, "not found")
+		return
+	}
+	p := auth.From(r.Context())
+	scheme, err := GetStrataScheme(r.Context(), d.Pool, p.OrgID, id)
+	if err != nil {
+		module.WriteCoreError(w, err)
+		return
+	}
+	var req askRequest
+	if err := module.ReadJSON(r, &req); err != nil {
+		module.WriteError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	role := StrataRole(req.Role)
+	if _, ok := profileFor(role); !ok {
+		module.WriteError(w, http.StatusUnprocessableEntity, `role must be "chairperson" or "treasurer"`)
+		return
+	}
+	question := strings.TrimSpace(req.Question)
+	if question == "" || utf8.RuneCountInString(question) > strataQuestionMax {
+		module.WriteError(w, http.StatusUnprocessableEntity, "question must be 1 to 2000 characters")
+		return
+	}
+	if !role.Held(scheme) {
+		module.WriteError(w, http.StatusForbidden, "the organisation does not hold the "+string(role)+" position on this scheme")
+		return
+	}
+	if _, busy := askingUsers.LoadOrStore(p.UserID, struct{}{}); busy {
+		module.WriteError(w, http.StatusTooManyRequests, "a question is already running")
+		return
+	}
+	defer askingUsers.Delete(p.UserID)
+
+	ans, err := AskStrata(r.Context(), d.Pool, d.LLM, scheme, role, question)
+	if err != nil {
+		var re *llm.RetryableError
+		switch {
+		case errors.As(err, &re), errors.Is(err, llm.ErrPermanent), errors.Is(err, context.DeadlineExceeded):
+			slog.Warn("strata assistant provider failure", "scheme_id", scheme.ID, "role", role, "error", err)
+			module.WriteError(w, http.StatusBadGateway, "the model provider failed to answer; try again")
+		case errors.Is(err, context.Canceled):
+			// The client went away; nothing to send.
+		default:
+			module.WriteCoreError(w, err)
+		}
+		return
+	}
+	out := askResponse{Answer: ans.Markdown, Grounded: ans.Grounded, Citations: []citationResponse{}}
+	for _, c := range ans.Citations {
+		out.Citations = append(out.Citations, citationResponse{c.DocumentID, c.Title, c.DocumentDate.Format(time.DateOnly), c.PageNo})
+	}
+	module.WriteJSON(w, http.StatusOK, out)
 }

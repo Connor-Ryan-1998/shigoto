@@ -1,0 +1,67 @@
+# resolveCitations(markdown, seen) cases. `seen` lists the [document,
+# page] pairs that tool results returned during the request (titles are
+# "Doc <id>"). `want` is the rendered markdown and the citations, in
+# numbering order, as [document, page].
+- name: a seen marker becomes a numbered reference
+  seen: [[12, 3]]
+  md: "The roof was replaced [doc:12 p:3]."
+  want:
+    md: "The roof was replaced [1]."
+    citations: [[12, 3]]
+    grounded: true
+
+- name: repeated marker reuses its number
+  seen: [[12, 3], [12, 4]]
+  md: "Carried [doc:12 p:3]. Funded [doc:12 p:4]. Again [doc:12 p:3]."
+  want:
+    md: "Carried [1]. Funded [2]. Again [1]."
+    citations: [[12, 3], [12, 4]]
+    grounded: true
+
+- name: an unseen page is stripped
+  seen: [[12, 3]]
+  md: "Carried [doc:12 p:3]. Invented [doc:12 p:9]."
+  want:
+    md: "Carried [1]. Invented."
+    citations: [[12, 3]]
+    grounded: true
+
+- name: an unseen document is stripped and the answer is ungrounded
+  seen: [[12, 3]]
+  md: "The levy rose [doc:99 p:1]."
+  want:
+    md: "The levy rose."
+    citations: []
+    grounded: false
+
+- name: no markers at all is ungrounded
+  seen: [[12, 3]]
+  md: "I could not find that in the documents."
+  want:
+    md: "I could not find that in the documents."
+    citations: []
+    grounded: false
+
+- name: malformed markers are left as text
+  seen: [[12, 3]]
+  md: "See [doc:x p:2] and [doc:12 p:3]."
+  want:
+    md: "See [doc:x p:2] and [1]."
+    citations: [[12, 3]]
+    grounded: true
+
+- name: adjacent markers each resolve
+  seen: [[12, 3], [15, 1]]
+  md: "Both say so [doc:12 p:3][doc:15 p:1]."
+  want:
+    md: "Both say so [1][2]."
+    citations: [[12, 3], [15, 1]]
+    grounded: true
+
+- name: marker spacing variants are accepted
+  seen: [[12, 3]]
+  md: "Carried [doc: 12, p: 3]."
+  want:
+    md: "Carried [1]."
+    citations: [[12, 3]]
+    grounded: true

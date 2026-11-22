@@ -1,0 +1,66 @@
+# POST /strata-schemes/{id}/ask: permissions, isolation, role gate and
+# input rules, with a scripted model reply. Agent behaviour (tools,
+# citations, round cap, in-flight guard) is owned by
+# internal/property/strata_agent_integration_test.go.
+seed:
+  orgs: [acme, other]
+  assistant: {reply: "No relevant decision is recorded."}
+  users:
+    owner: {org: acme, role: owner}
+    staff: {org: acme, role: staff}
+    keeper: {org: acme, role: bookkeeper}
+    other_owner: {org: other, role: owner}
+  strata_schemes:
+    s_chair: {org: acme, name: Harbour View CTS, positions: [chairperson]}
+    s_other: {org: other, name: Elsewhere CTS, positions: [chairperson, treasurer]}
+
+cases:
+  - name: readers ask the chairperson assistant
+    as: [owner, staff, keeper]
+    isolate: true
+    request: {method: POST, path: "/api/v1/orgs/acme/strata-schemes/{s_chair}/ask", body: {role: chairperson, question: "What did the committee decide about the roof in 2024?"}}
+    expect:
+      status: 200
+      body: {answer: "No relevant decision is recorded.", citations: [], grounded: false}
+      exact: true
+    unchanged: [audit_log, strata_documents]
+
+  - name: role not held by the org is forbidden
+    as: owner
+    request: {method: POST, path: "/api/v1/orgs/acme/strata-schemes/{s_chair}/ask", body: {role: treasurer, question: "levies?"}}
+    expect: {status: 403, body: {error: the organisation does not hold the treasurer position on this scheme}, exact: true}
+
+  - name: secretary has no assistant
+    as: owner
+    request: {method: POST, path: "/api/v1/orgs/acme/strata-schemes/{s_chair}/ask", body: {role: secretary, question: "notices?"}}
+    expect: {status: 422, body: {error: 'role must be "chairperson" or "treasurer"'}, exact: true}
+
+  - name: blank question rejected
+    as: owner
+    request: {method: POST, path: "/api/v1/orgs/acme/strata-schemes/{s_chair}/ask", body: {role: chairperson, question: "   "}}
+    expect: {status: 422, body: {error: question must be 1 to 2000 characters}, exact: true}
+
+  - name: unknown body field rejected
+    as: owner
+    request: {method: POST, path: "/api/v1/orgs/acme/strata-schemes/{s_chair}/ask", body: {role: chairperson, question: "roof?", scheme_id: 999}}
+    expect: {status: 400}
+
+  - name: another org's scheme is not found
+    as: owner
+    request: {method: POST, path: "/api/v1/orgs/acme/strata-schemes/{s_other}/ask", body: {role: chairperson, question: "roof?"}}
+    expect: {status: 404, body: {error: not found}, exact: true}
+
+  - name: another org cannot ask about our scheme
+    as: other_owner
+    request: {method: POST, path: "/api/v1/orgs/other/strata-schemes/{s_chair}/ask", body: {role: chairperson, question: "roof?"}}
+    expect: {status: 404, body: {error: not found}, exact: true}
+
+  - name: anonymous cannot ask
+    as: anonymous
+    request: {method: POST, path: "/api/v1/orgs/acme/strata-schemes/{s_chair}/ask", body: {role: chairperson, question: "roof?"}}
+    expect: {status: 401}
+
+  - name: overlong question rejected
+    as: owner
+    request: {method: POST, path: "/api/v1/orgs/acme/strata-schemes/{s_chair}/ask", body: {role: chairperson, question: "qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq"}}
+    expect: {status: 422, body: {error: question must be 1 to 2000 characters}, exact: true}
