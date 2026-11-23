@@ -1,0 +1,17 @@
+id: client-checklist-item
+component: ChecklistItemDialog
+props:
+  open: true
+  org: acme
+  contactId: 9
+callbacks: [onsaved]
+fill: {Action: Grant analytics access, Owner: Sam (Acme), Due date: "2026-11-25"}
+submit: Add item
+request: POST /api/v1/orgs/acme/contacts/9/checklist
+contract:
+  blocks_duplicate_submit: true
+  preserves_input_on: 422
+  cancel: Cancel
+  busy_dismiss_blocked: true
+  dirty_dismiss_confirms: true
+  dirty_navigation_blocked: true

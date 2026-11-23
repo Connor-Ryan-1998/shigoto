@@ -23,6 +23,22 @@ beforeEach(() => {
 });
 
 describe('portal layout', () => {
+	it('gives clients Hub, Documents and Invoices but no tenant links', () => {
+		setPage({ params: { org: 'acme' }, url: new URL('http://localhost/portal/acme/hub') });
+		session.setMe(meWithOrgs([{ slug: 'acme', name: 'Acme', role: 'client', portal: true }]));
+		render(Layout, { children: childSnippet() });
+		expect(screen.getByRole('link', { name: 'Hub' }).getAttribute('aria-current')).toBe('page');
+		expect(screen.getByRole('link', { name: 'Documents' }).getAttribute('href')).toBe('/portal/acme/documents');
+		expect(screen.getByRole('link', { name: 'Invoices' })).toBeTruthy();
+		expect(screen.queryByRole('link', { name: 'Rent' })).toBeNull();
+	});
+
+	it('gives tenants no Hub', () => {
+		session.setMe(meWithOrgs([{ slug: 'acme', name: 'Acme', role: 'tenant', portal: true }]));
+		render(Layout, { children: childSnippet() });
+		expect(screen.queryByRole('link', { name: 'Hub' })).toBeNull();
+	});
+
 	it('offers skip navigation and identifies the current portal section without staff links', () => {
 		session.setMe(meWithOrgs([{ slug: 'acme', name: 'Acme', role: 'tenant', portal: true }]));
 		render(Layout, { children: childSnippet() });

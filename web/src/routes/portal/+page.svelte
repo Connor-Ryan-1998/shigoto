@@ -8,6 +8,9 @@
 
 	type PortalOrg = { slug: string; name: string; role: string };
 
+	// Clients land on their hub; tenants on invoices.
+	const landing = (o: PortalOrg) => `/portal/${o.slug}/${o.role === 'client' ? 'hub' : 'invoices'}`;
+
 	let status = $state<'loading' | 'error' | 'ready'>('loading');
 	let errorMessage = $state('');
 	let orgs = $state<PortalOrg[]>([]);
@@ -24,7 +27,7 @@
 			// A single org skips the picker entirely - most portal users
 			// belong to exactly one.
 			if (result.length === 1) {
-				goto(`/portal/${result[0].slug}/invoices`);
+				goto(landing(result[0]));
 				return;
 			}
 			orgs = result;
@@ -53,7 +56,7 @@
 {:else}
 	<ul class="menu w-full max-w-md rounded-box bg-base-100 shadow-sm">
 		{#each orgs as org (org.slug)}
-			<li><a href={`/portal/${org.slug}/invoices`}>{org.name}</a></li>
+			<li><a href={landing(org)}>{org.name}</a></li>
 		{/each}
 	</ul>
 {/if}

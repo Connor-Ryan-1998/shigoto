@@ -110,6 +110,18 @@ cases:
     expect:
       status: 200
       body: {status: completed, active: false, description: Done, start_date: "2026-01-01", end_date: null, billing_method: fixed}
+  # Client-facing details are optional on PUT: omitted keeps the stored
+  # value, so older clients that don't know them never wipe them.
+  - name: project update stores client-facing summary, goals and stakeholders
+    as: owner
+    isolate: true
+    request:
+      method: PUT
+      path: "/api/v1/orgs/acme/projects/{pr}"
+      body: {name: Website rebuild, client_contact_id: "{c_client}", hourly_rate: 12000, gst_code: GST, status: pending, description: Internal, start_date: null, end_date: null, billing_method: fixed, summary: "Rebuild the site", goals: "Bookings live\nFast mobile", stakeholders: "Priya Nair — Sponsor"}
+    expect:
+      status: 200
+      body: {summary: "Rebuild the site", goals: "Bookings live\nFast mobile", stakeholders: "Priya Nair — Sponsor"}
 
   # PUT /tasks/{id} must name hourly_rate (null clears the override); an
   # omitted key is not "leave the override alone".

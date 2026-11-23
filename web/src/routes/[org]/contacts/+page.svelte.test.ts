@@ -36,6 +36,14 @@ async function name(value = 'New contact') {
 function form() { return screen.getByRole('button', { name: 'Create contact' }).closest('form')!; }
 
 describe('contacts', () => {
+	it('links a client to its portal page and leaves other kinds plain', async () => {
+		apiMock.mockResolvedValue([{ ...contact }, { ...contact, id: 9, kind: 'client', name: 'Client One' }]);
+		render(Page);
+		const link = await screen.findByRole('link', { name: 'Client One' });
+		expect(link.getAttribute('href')).toBe('/acme/contacts/9');
+		expect(screen.queryByRole('link', { name: 'Tina Tenant' })).toBeNull();
+	});
+
 	it('edits existing details and clears optional fields without changing kind or provider identity', async () => {
 		let saved = false;
 		apiMock.mockImplementation((method: string, _path: string, body: object) => {

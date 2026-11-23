@@ -17,6 +17,7 @@ import (
 
 	"shigoto/internal/auth"
 	"shigoto/internal/billing"
+	"shigoto/internal/clients"
 	"shigoto/internal/config"
 	"shigoto/internal/core"
 	"shigoto/internal/mail"
@@ -163,8 +164,10 @@ func New(d Deps) http.Handler {
 			createPortalInvite(w, r, d)
 		})))
 
-	md := module.Deps{Pool: d.Pool, Auth: d.Auth, Cfg: d.Cfg, Billing: d.Billing, Store: d.Store}
+	md := module.Deps{Pool: d.Pool, Auth: d.Auth, Cfg: d.Cfg, Billing: d.Billing, Store: d.Store, Mailer: d.Mailer}
 	portal.RegisterRoutes(mux, md)
+	// Client portal management is core: always on.
+	clients.RegisterRoutes(mux, md)
 	// Reports are core: always on, never gated by d.Cfg.Modules.
 	reports.RegisterRoutes(mux, md)
 	var enabled []string

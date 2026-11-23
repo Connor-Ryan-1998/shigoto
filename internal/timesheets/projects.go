@@ -35,16 +35,21 @@ func validateGSTCode(code core.GSTCode) error {
 // --- projects ---
 
 const projectColumns = `id, org_id, client_contact_id, name, hourly_rate, gst_code,
-	status, description, start_date, end_date, billing_method, active`
+	status, description, start_date, end_date, billing_method, active,
+	summary, goals, stakeholders`
 
 func scanProject(row pgx.Row) (Project, error) {
 	var p Project
 	var gstCode string
 	err := row.Scan(&p.ID, &p.OrgID, &p.ClientContactID, &p.Name, &p.HourlyRate, &gstCode,
-		&p.Status, &p.Description, &p.StartDate, &p.EndDate, &p.BillingMethod, &p.Active)
+		&p.Status, &p.Description, &p.StartDate, &p.EndDate, &p.BillingMethod, &p.Active,
+		&p.Summary, &p.Goals, &p.Stakeholders)
 	p.GSTCode = core.GSTCode(gstCode)
 	return p, err
 }
+
+// maxClientText caps each client-facing project text field.
+const maxClientText = 4000
 
 // validateProject checks the fields CreateProject/UpdateProject share. The
 // client contact is validated separately by checkClient.
@@ -67,6 +72,13 @@ func validateProject(p Project) error {
 	}
 	if utf8.RuneCountInString(p.Description) > 2000 {
 		return fmt.Errorf("%w: description must be at most 2000 characters", core.ErrInvalidInput)
+	}
+	for _, f := range []struct{ name, value string }{
+		{"summary", p.Summary}, {"goals", p.Goals}, {"stakeholders", p.Stakeholders},
+	} {
+		if utf8.RuneCountInString(f.value) > maxClientText {
+			return fmt.Errorf("%w: %s must be at most %d characters", core.ErrInvalidInput, f.name, maxClientText)
+		}
 	}
 	if p.StartDate != nil && p.EndDate != nil && p.EndDate.Before(*p.StartDate) {
 		return fmt.Errorf("%w: end_date must not be before start_date", core.ErrInvalidInput)
@@ -120,11 +132,13 @@ func CreateProject(ctx context.Context, q core.Querier, orgID int64, p Project) 
 
 	row := q.QueryRow(ctx, `
 		INSERT INTO projects (org_id, client_contact_id, name, hourly_rate, gst_code,
-			status, description, start_date, end_date, billing_method)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			status, description, start_date, end_date, billing_method,
+			summary, goals, stakeholders)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 		RETURNING `+projectColumns,
 		orgID, p.ClientContactID, p.Name, int64(p.HourlyRate), string(p.GSTCode),
 		p.Status, p.Description, p.StartDate, p.EndDate, p.BillingMethod,
+		p.Summary, p.Goals, p.Stakeholders,
 	)
 	created, err := scanProject(row)
 	if isUniqueViolation(err) {
@@ -206,6 +220,16 @@ func UpdateProject(ctx context.Context, q core.Querier, orgID, id int64, p Proje
 		if billed {
 			return Project{}, fmt.Errorf("%w: the customer can't change once project time has been invoiced", core.ErrInvalidState)
 		}
+		// Client documents on the project belong to the current customer;
+		// moving the project would show them under another client's project.
+		var hasDocs bool
+		if err := q.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM client_documents WHERE org_id = $1 AND project_id = $2)`,
+			orgID, id).Scan(&hasDocs); err != nil {
+			return Project{}, err
+		}
+		if hasDocs {
+			return Project{}, &core.PublicError{Err: core.ErrInvalidState, Msg: "the customer can't change once the project has client documents"}
+		}
 	}
 
 	var exists bool
@@ -222,12 +246,12 @@ func UpdateProject(ctx context.Context, q core.Querier, orgID, id int64, p Proje
 	row := q.QueryRow(ctx, `
 		UPDATE projects SET name = $1, hourly_rate = $2, gst_code = $3, status = $4,
 			description = $5, start_date = $6, end_date = $7, billing_method = $8,
-			client_contact_id = $9
+			client_contact_id = $9, summary = $12, goals = $13, stakeholders = $14
 		WHERE org_id = $10 AND id = $11
 		RETURNING `+projectColumns,
 		p.Name, int64(p.HourlyRate), string(p.GSTCode), p.Status,
 		p.Description, p.StartDate, p.EndDate, p.BillingMethod,
-		p.ClientContactID, orgID, id,
+		p.ClientContactID, orgID, id, p.Summary, p.Goals, p.Stakeholders,
 	)
 	updated, err := scanProject(row)
 	if isUniqueViolation(err) {

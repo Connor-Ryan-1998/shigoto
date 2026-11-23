@@ -16,6 +16,7 @@
 	import LogTimeDialog from '../../../../lib/modules/timesheets/LogTimeDialog.svelte';
 	import EntriesTable from '../../../../lib/modules/timesheets/EntriesTable.svelte';
 	import HoursChart from '../../../../lib/modules/timesheets/HoursChart.svelte';
+	import ClientDocuments from '../../../../lib/modules/clients/ClientDocuments.svelte';
 	import {
 		BILLING_LABELS,
 		PERIOD_LABELS,
@@ -41,6 +42,10 @@
 	const canRead = $derived(membership?.perms.includes('timesheets_read') ?? false);
 	const canWrite = $derived(membership?.perms.includes('timesheets_write') ?? false);
 	const isAdmin = $derived(membership?.perms.includes('timesheets_admin') ?? false);
+	// Client documents need invoices_read to view and contacts_write to manage.
+	const canReadDocs = $derived(membership?.perms.includes('invoices_read') ?? false);
+	const canWriteDocs = $derived(membership?.perms.includes('contacts_write') ?? false);
+	const lines = (s: string | undefined) => (s ?? '').split('\n').map((l) => l.trim()).filter(Boolean);
 
 	let project = $state<Project | null>(null);
 	let contacts = $state<Contact[]>([]);
@@ -298,6 +303,29 @@
 				</div>
 			</section>
 		</div>
+
+		<section class="card mt-6 bg-base-100 shadow-sm" aria-labelledby="client-portal-heading">
+			<div class="card-body">
+				<h2 id="client-portal-heading" class="text-lg font-semibold">Client portal</h2>
+				<p class="text-sm text-base-content/70">What the client sees on this project's page.{#if isAdmin} Edit these in the project details.{/if}</p>
+				<div class="grid gap-4 md:grid-cols-3">
+					<div><h3 class="text-sm text-base-content/70">Summary</h3><p class="whitespace-pre-wrap">{project.summary || '—'}</p></div>
+					<div><h3 class="text-sm text-base-content/70">Goals</h3>
+						{#if lines(project.goals).length}<ul class="list-disc pl-5">{#each lines(project.goals) as g, i (i)}<li>{g}</li>{/each}</ul>{:else}<p>—</p>{/if}
+					</div>
+					<div><h3 class="text-sm text-base-content/70">Primary stakeholders</h3>
+						{#if lines(project.stakeholders).length}<ul class="list-disc pl-5">{#each lines(project.stakeholders) as st, i (i)}<li>{st}</li>{/each}</ul>{:else}<p>—</p>{/if}
+					</div>
+				</div>
+			</div>
+		</section>
+
+		{#if canReadDocs}
+			<div class="mt-6">
+				<ClientDocuments {org} contactId={project.client_contact_id} projectId={project.id}
+					projects={[{ id: project.id, name: project.name }]} canWrite={canWriteDocs} />
+			</div>
+		{/if}
 
 		<section class="mt-6" aria-labelledby="users-heading">
 			<h2 id="users-heading" class="mb-2 text-lg font-semibold">Users</h2>

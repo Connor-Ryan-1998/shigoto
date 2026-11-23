@@ -41,6 +41,12 @@ type Project struct {
 	EndDate         *time.Time
 	BillingMethod   string
 	Active          bool
+	// Summary, Goals and Stakeholders are the client-facing project
+	// details shown in the client portal. Goals and Stakeholders hold one
+	// entry per line.
+	Summary      string
+	Goals        string
+	Stakeholders string
 }
 
 // Task is one task within a Project. HourlyRate, when set, overrides the

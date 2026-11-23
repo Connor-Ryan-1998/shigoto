@@ -48,6 +48,10 @@ vi.mock('$app/navigation', async () => {
 	};
 });
 
+// jsdom doesn't implement window.open; a spy lets tests assert a new tab
+// was requested without jsdom logging "Not implemented".
+window.open = vi.fn(() => null);
+
 // Spies, so a test can assert a dialog was opened or closed.
 const showModal = vi.fn(function (this: HTMLDialogElement) {
 	this.open = true;

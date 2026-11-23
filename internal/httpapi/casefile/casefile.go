@@ -59,6 +59,33 @@ type Seed struct {
 	Tasks         map[string]SeedTask         `yaml:"tasks"`
 	Invites       map[string]SeedInvite       `yaml:"invites"`
 	Settings      map[string]SeedSettings     `yaml:"settings"` // key is the org slug
+	// Welcome is a client contact's welcome note, keyed by seed contact.
+	Welcome   map[string]string            `yaml:"welcome"`
+	Checklist map[string]SeedChecklistItem `yaml:"checklist"`
+	Documents map[string]SeedDocument      `yaml:"documents"`
+}
+
+// SeedChecklistItem is a kickoff checklist item for the client Contact.
+type SeedChecklistItem struct {
+	Org     string `yaml:"org"`
+	Contact string `yaml:"contact"`
+	Action  string `yaml:"action"`
+	Done    bool   `yaml:"done"`
+}
+
+// SeedDocument is a client document (a tiny generated PDF) for the client
+// Contact, optionally on the seed project Project. Status defaults to
+// draft; signed needs Signer, the seed client user who signs it. Kind is
+// signature or shared; Category defaults to general.
+type SeedDocument struct {
+	Org      string `yaml:"org"`
+	Contact  string `yaml:"contact"`
+	Project  string `yaml:"project"`
+	Title    string `yaml:"title"`
+	Kind     string `yaml:"kind"`
+	Category string `yaml:"category"`
+	Status   string `yaml:"status"`
+	Signer   string `yaml:"signer"`
 }
 
 // SeedUser is a member of Org with Role. Contact (a seed contact name in
@@ -85,6 +112,8 @@ type SeedInvoice struct {
 	Status  string `yaml:"status"`
 	Source  string `yaml:"source"`
 	Amount  int64  `yaml:"amount"`
+	// Project, when set, puts the invoice's lines on that seed project.
+	Project string `yaml:"project"`
 }
 
 // SeedProperty is a property in Org, residential unless Commercial.
@@ -147,9 +176,12 @@ type SeedPayment struct {
 }
 
 // SeedProject is a timesheets project for the seed contact Client.
+// Name and Status are optional (testkit defaults).
 type SeedProject struct {
 	Org    string `yaml:"org"`
 	Client string `yaml:"client"`
+	Name   string `yaml:"name"`
+	Status string `yaml:"status"`
 }
 
 // SeedTask is a task in the seed project Project. Empty Name takes the
@@ -287,6 +319,8 @@ func (s Seed) seedNames() map[string]string {
 	add("projects", sortedKeys(s.Projects))
 	add("tasks", sortedKeys(s.Tasks))
 	add("invites", sortedKeys(s.Invites))
+	add("checklist", sortedKeys(s.Checklist))
+	add("documents", sortedKeys(s.Documents))
 	return names
 }
 
@@ -338,6 +372,8 @@ func (f File) Validate() error {
 		{"projects", sortedKeys(s.Projects)},
 		{"tasks", sortedKeys(s.Tasks)},
 		{"invites", sortedKeys(s.Invites)},
+		{"checklist", sortedKeys(s.Checklist)},
+		{"documents", sortedKeys(s.Documents)},
 	} {
 		for _, k := range group.keys {
 			if prev, dup := seen[k]; dup {
@@ -393,6 +429,61 @@ func (f File) Validate() error {
 		}
 		if inv.Amount < 0 {
 			seedErr("%s: negative amount %d", where, inv.Amount)
+		}
+		if inv.Project != "" {
+			if p, ok := s.Projects[inv.Project]; !ok {
+				seedErr("%s: project: unknown project %q", where, inv.Project)
+			} else if p.Org != inv.Org {
+				seedErr("%s: project: project %q is in org %q, not %q", where, inv.Project, p.Org, inv.Org)
+			}
+		}
+	}
+	for _, name := range sortedKeys(s.Welcome) {
+		c, ok := s.Contacts[name]
+		if !ok {
+			seedErr("welcome.%s: unknown contact %q", name, name)
+		} else if c.Kind != "client" {
+			seedErr("welcome.%s: contact %q is not a client", name, name)
+		}
+	}
+	for _, name := range sortedKeys(s.Checklist) {
+		it := s.Checklist[name]
+		where := "checklist." + name
+		checkOrg(where, it.Org)
+		checkContact(where, "contact", it.Contact, it.Org)
+		if strings.TrimSpace(it.Action) == "" {
+			seedErr("%s: action is required", where)
+		}
+	}
+	for _, name := range sortedKeys(s.Documents) {
+		doc := s.Documents[name]
+		where := "documents." + name
+		checkOrg(where, doc.Org)
+		checkContact(where, "contact", doc.Contact, doc.Org)
+		if doc.Project != "" {
+			if p, ok := s.Projects[doc.Project]; !ok {
+				seedErr("%s: project: unknown project %q", where, doc.Project)
+			} else if p.Client != doc.Contact {
+				seedErr("%s: project: project %q is not contact %q's", where, doc.Project, doc.Contact)
+			}
+		}
+		if doc.Kind != "signature" && doc.Kind != "shared" {
+			seedErr("%s: kind %q must be signature or shared", where, doc.Kind)
+		}
+		switch doc.Status {
+		case "", "draft", "sent", "withdrawn", "superseded":
+			if doc.Signer != "" {
+				seedErr("%s: signer is only for signed documents", where)
+			}
+		case "signed":
+			if doc.Kind != "signature" {
+				seedErr("%s: only signature documents can be signed", where)
+			}
+			if u, ok := s.Users[doc.Signer]; !ok || u.Role != "client" || u.Contact != doc.Contact {
+				seedErr("%s: signer %q must be a client user for contact %q", where, doc.Signer, doc.Contact)
+			}
+		default:
+			seedErr("%s: unknown status %q", where, doc.Status)
 		}
 	}
 	for _, name := range sortedKeys(s.StrataSchemes) {
@@ -470,6 +561,11 @@ func (f File) Validate() error {
 		where := "projects." + name
 		checkOrg(where, p.Org)
 		checkContact(where, "client", p.Client, p.Org)
+		switch p.Status {
+		case "", "pending", "in_progress", "completed", "cancelled":
+		default:
+			seedErr("%s: unknown status %q", where, p.Status)
+		}
 	}
 	for _, name := range sortedKeys(s.Tasks) {
 		tk := s.Tasks[name]

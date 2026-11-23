@@ -218,6 +218,19 @@ func TestValidateRejectsBadSeedAndCases(t *testing.T) {
 			f.Seed.Leases = map[string]SeedLease{"l": {Org: "other", Property: "p", Tenant: "c_foreign"}}
 		}, []string{"l", "p"}},
 		{"unknown project client", func(f *File) { f.Seed.Projects = map[string]SeedProject{"pr": {Org: "acme", Client: "zz"}} }, []string{"pr", "zz"}},
+		{"bad project status", func(f *File) {
+			f.Seed.Projects = map[string]SeedProject{"pr": {Org: "other", Client: "c_foreign", Status: "paused"}}
+		}, []string{"projects.pr", "paused"}},
+		{"signed document without signer", func(f *File) {
+			f.Seed.Documents = map[string]SeedDocument{"d": {Org: "other", Contact: "c_foreign", Kind: "signature", Status: "signed"}}
+		}, []string{"documents.d", "signer"}},
+		{"bad document kind", func(f *File) {
+			f.Seed.Documents = map[string]SeedDocument{"d": {Org: "other", Contact: "c_foreign", Kind: "contract"}}
+		}, []string{"documents.d", "contract"}},
+		{"welcome for unknown contact", func(f *File) { f.Seed.Welcome = map[string]string{"ghost": "hi"} }, []string{"welcome.ghost"}},
+		{"checklist without action", func(f *File) {
+			f.Seed.Checklist = map[string]SeedChecklistItem{"ck": {Org: "other", Contact: "c_foreign"}}
+		}, []string{"checklist.ck", "action"}},
 		{"unknown invite org", func(f *File) {
 			f.Seed.Invites = map[string]SeedInvite{"iv": {Org: "nope", Email: "a@example.com", Role: "staff", Token: "t"}}
 		}, []string{"invites.iv", "nope"}},

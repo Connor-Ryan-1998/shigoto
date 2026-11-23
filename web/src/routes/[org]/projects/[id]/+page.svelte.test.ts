@@ -6,7 +6,7 @@ import { session } from '../../../../lib/session.svelte';
 
 import Page from './+page.svelte';
 
-const project = {
+const project: Record<string, unknown> & { summary?: string; goals?: string } = {
 	id: 5, client_contact_id: 9, name: 'HTM Data Platform', hourly_rate: 12000, gst_code: 'GST', status: 'in_progress',
 	description: '', start_date: null, end_date: null, billing_method: 'tm', active: true
 };
@@ -20,6 +20,11 @@ function route(m: string, p: string): Promise<unknown> {
 	if (m !== 'GET') return Promise.resolve({});
 	if (p.endsWith('/projects/5')) return Promise.resolve(project);
 	if (p.endsWith('/tasks')) return Promise.resolve([{ id: 1, project_id: 5, name: 'Task 1', active: true }, { id: 2, project_id: 5, name: 'Task 2', hourly_rate: 20000, active: true }]);
+	if (p.includes('/documents?project=5')) return Promise.resolve([{
+		id: 3, contact_id: 9, project_id: 5, title: 'SOW', kind: 'signature', category: 'general', status: 'sent',
+		sent_at: null, created_at: '2026-11-20T00:00:00Z', supersedes_id: null,
+		file: { id: 1, mime: 'application/pdf', size_bytes: 1, original_name: 'sow.pdf' }, signature: null
+	}]);
 	if (p.includes('/time-entries')) return Promise.resolve({ entries: p.includes('billed=true') ? [entries[0]] : entries, total_minutes: 0 });
 	return Promise.resolve([{ id: 9, name: 'Rizzware', kind: 'client' }]);
 }
@@ -34,6 +39,28 @@ beforeEach(() => {
 });
 
 describe('project detail', () => {
+	it('shows client portal details and project documents to staff who can read contacts', async () => {
+		project.summary = 'Rebuild the site';
+		project.goals = 'Bookings live\nFast mobile';
+		session.setMe({ user: { id: 1, email: 'o@example.com', name: 'Owner' }, orgs: [{ slug: 'acme', name: 'Acme', role: 'owner',
+			perms: ['timesheets_read', 'timesheets_admin', 'invoices_read', 'contacts_write'] }] });
+		session.setOrg('acme');
+		render(Page);
+		const portal = (await screen.findByRole('heading', { name: 'Client portal' })).closest('section')!;
+		expect(within(portal).getByText('Rebuild the site')).toBeTruthy();
+		expect(within(portal).getByText('Fast mobile')).toBeTruthy();
+		expect(await screen.findByText('SOW')).toBeTruthy();
+		expect(apiMock).toHaveBeenCalledWith('GET', '/api/v1/orgs/acme/contacts/9/documents?project=5');
+		delete project.summary;
+		delete project.goals;
+	});
+
+	it('hides project documents without invoices_read', async () => {
+		render(Page);
+		await screen.findByRole('heading', { name: 'HTM Data Platform' });
+		expect(screen.queryByRole('heading', { name: 'Documents' })).toBeNull();
+	});
+
 	it('shows overview stats from all entries', async () => {
 		render(Page);
 		await screen.findByRole('heading', { name: 'HTM Data Platform' });

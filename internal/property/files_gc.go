@@ -27,6 +27,8 @@ var FileReferences = []struct{ Table, Column string }{
 	{"insurance_policies", "file_id"},
 	{"depreciation_documents", "file_id"},
 	{"maintenance_ticket_files", "file_id"},
+	{"client_documents", "file_id"},
+	{"document_signatures", "certificate_file_id"},
 }
 
 // unreferencedClause is the WHERE condition that no FileReferences column
@@ -40,9 +42,11 @@ func unreferencedClause() string {
 	return strings.Join(refs, " AND ")
 }
 
-// deleteFileIfUnreferenced deletes files row id, then its blob, when
-// nothing references it any more. A still-referenced file is kept.
-func deleteFileIfUnreferenced(ctx context.Context, q core.Querier, store storage.Store, id int64) error {
+// DeleteFileIfUnreferenced deletes files row id, then its blob, when
+// nothing references it any more. A still-referenced file is kept. Call it
+// outside (after) the transaction that dropped the last reference, so a
+// rollback can't leave a files row without its blob.
+func DeleteFileIfUnreferenced(ctx context.Context, q core.Querier, store storage.Store, id int64) error {
 	var key storage.Key
 	err := q.QueryRow(ctx, `DELETE FROM files f WHERE f.id = $1 AND `+unreferencedClause()+`
 		RETURNING f.org_id, f.sha256`, id).Scan(&key.OrgID, &key.SHA256)
@@ -67,7 +71,7 @@ func DeletePendingFile(ctx context.Context, pool *pgxpool.Pool, store storage.St
 	if err != nil {
 		return err
 	}
-	return deleteFileIfUnreferenced(ctx, pool, store, fileID)
+	return DeleteFileIfUnreferenced(ctx, pool, store, fileID)
 }
 
 // PrunePendingFiles deletes pending uploads older than 24 hours as of now,
@@ -96,7 +100,7 @@ func PrunePendingFiles(ctx context.Context, pool *pgxpool.Pool, store storage.St
 		return err
 	}
 	for _, id := range fileIDs {
-		if err := deleteFileIfUnreferenced(ctx, pool, store, id); err != nil {
+		if err := DeleteFileIfUnreferenced(ctx, pool, store, id); err != nil {
 			slog.Error("deleting expired upload", "file_id", id, "error", err)
 		}
 	}

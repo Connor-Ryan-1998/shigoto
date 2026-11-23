@@ -42,6 +42,9 @@
 	let start = $state('');
 	let end = $state('');
 	let description = $state('');
+	let summary = $state('');
+	let goals = $state('');
+	let stakeholders = $state('');
 	let error = $state('');
 	let busy = $state(false);
 	let actionSeq = 0;
@@ -64,6 +67,9 @@
 		start = project?.start_date ?? '';
 		end = project?.end_date ?? '';
 		description = project?.description ?? '';
+		summary = project?.summary ?? '';
+		goals = project?.goals ?? '';
+		stakeholders = project?.stakeholders ?? '';
 	}
 
 	async function submit(e: SubmitEvent) {
@@ -89,7 +95,10 @@
 			description,
 			start_date: start || null,
 			end_date: end || null,
-			billing_method: billing
+			billing_method: billing,
+			summary,
+			goals,
+			stakeholders
 		};
 		busy = true;
 		error = '';
@@ -157,6 +166,18 @@
 				<textarea class="textarea w-full" id="project-description" maxlength="2000" bind:value={description} disabled={busy}
 				></textarea>
 			</Field>
+			<fieldset class="fieldset gap-3">
+				<legend class="fieldset-legend">Client portal</legend>
+				<Field label="Client summary" id="project-summary" hint="Shown to the client on their project page.">
+					<textarea class="textarea w-full" id="project-summary" maxlength="4000" bind:value={summary} disabled={busy}></textarea>
+				</Field>
+				<Field label="Goals" id="project-goals" hint="One goal per line.">
+					<textarea class="textarea w-full" id="project-goals" maxlength="4000" bind:value={goals} disabled={busy}></textarea>
+				</Field>
+				<Field label="Primary stakeholders" id="project-stakeholders" hint="One per line, e.g. Priya Nair — Sponsor.">
+					<textarea class="textarea w-full" id="project-stakeholders" maxlength="4000" bind:value={stakeholders} disabled={busy}></textarea>
+				</Field>
+			</fieldset>
 			{#if error}
 				<p class="alert alert-error alert-soft" role="alert">{error}</p>
 			{/if}

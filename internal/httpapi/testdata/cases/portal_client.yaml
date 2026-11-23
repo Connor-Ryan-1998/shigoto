@@ -1,0 +1,205 @@
+# Client portal hub, projects, documents and signing.
+#
+# A client portal user sees only their own contact's welcome note,
+# checklist, projects and non-draft documents. Anyone else - another
+# client, a tenant, staff, or a client of another org - gets a bare 404.
+# Drafts are never visible; withdrawn and replaced documents stay listed
+# without a Sign action. Signing races, hash checks and certificate
+# contents are store invariants in internal/clients.
+seed:
+  orgs: [acme, beta]
+  users:
+    owner: {org: acme, role: owner}
+    client1: {org: acme, role: client, contact: c1}
+    client2: {org: acme, role: client, contact: c2}
+    tenant: {org: acme, role: tenant, contact: c_tenant}
+    beta_owner: {org: beta, role: owner}
+    beta_client: {org: beta, role: client, contact: c_beta}
+  contacts:
+    c1: {org: acme, kind: client, name: Client One}
+    c2: {org: acme, kind: client, name: Client Two}
+    c_tenant: {org: acme, kind: tenant, name: Tina Tenant}
+    c_beta: {org: beta, kind: client, name: Beta Client}
+  projects:
+    p1: {org: acme, client: c1, name: Website rebuild, status: pending}
+    p1_done: {org: acme, client: c1, name: Brand audit, status: completed}
+    p2: {org: acme, client: c2, name: Other client project}
+  invoices:
+    inv_p1: {org: acme, contact: c1, status: issued, project: p1}
+    inv_draft_p1: {org: acme, contact: c1, project: p1}
+    inv_other: {org: acme, contact: c1, status: issued, project: p1_done}
+  welcome:
+    c1: "Slack #acme for day-to-day, 4 business hours"
+  checklist:
+    ck1: {org: acme, contact: c1, action: Grant analytics access}
+    ck2: {org: acme, contact: c1, action: Send brand guidelines, done: true}
+    ck_c2: {org: acme, contact: c2, action: Not yours}
+  documents:
+    d_msa: {org: acme, contact: c1, title: MSA, kind: signature, status: signed, signer: client1}
+    d_sow: {org: acme, contact: c1, project: p1, title: SOW, kind: signature, status: sent}
+    d_disc: {org: acme, contact: c1, project: p1, title: Discovery notes, kind: shared, category: discovery, status: sent}
+    d_draft: {org: acme, contact: c1, project: p1, title: Draft SOW, kind: signature}
+    d_withdrawn: {org: acme, contact: c1, project: p1, title: Old NDA, kind: signature, status: withdrawn}
+    d_shared_withdrawn: {org: acme, contact: c1, title: Old report, kind: shared, status: withdrawn}
+    d_c2: {org: acme, contact: c2, title: Theirs, kind: signature, status: sent}
+
+cases:
+  - name: client hub shows only their own welcome, checklist, projects and counts
+    as: client1
+    request: {method: GET, path: /api/v1/portal/acme/hub}
+    expect:
+      status: 200
+      body:
+        welcome: {notes: "Slack #acme for day-to-day, 4 business hours"}
+        checklist:
+          - {action: Grant analytics access, done_at: null}
+          - {action: Send brand guidelines}
+        projects:
+          - {name: Website rebuild, status: pending, to_sign: 1}
+          - {name: Brand audit, status: completed, to_sign: 0}
+        documents: {to_sign: 1, signed: 1, shared: 1}
+
+  - name: hub is only for clients
+    as: [tenant, owner, beta_client]
+    request: {method: GET, path: /api/v1/portal/acme/hub}
+    expect: {status: 404, body: {error: not found}, exact: true}
+
+  - name: client sees their project with documents grouped and project invoices
+    as: client1
+    request: {method: GET, path: "/api/v1/portal/acme/projects/{p1}"}
+    expect:
+      status: 200
+      body:
+        name: Website rebuild
+        status: pending
+        documents:
+          to_sign: [{title: SOW, status: sent}]
+          signed: [{title: MSA, applies_to_all: true}]
+          discovery: [{title: Discovery notes}]
+          shared: []
+          inactive: [{title: Old NDA, status: withdrawn}]
+        invoices: [{id: "{inv_p1}"}]
+
+  - name: another client's project is not found
+    as: [client1, beta_client, tenant]
+    request: {method: GET, path: "/api/v1/portal/acme/projects/{p2}"}
+    expect: {status: 404, body: {error: not found}, exact: true}
+
+  - name: documents list excludes drafts and other clients
+    as: client1
+    request: {method: GET, path: /api/v1/portal/acme/documents}
+    expect:
+      status: 200
+      body:
+        # Newest first; seeds are created in name order.
+        - {title: Old NDA, status: withdrawn}
+        - {title: SOW, status: sent, project_name: Website rebuild}
+        - {title: Old report, status: withdrawn}
+        - {title: MSA, status: signed, signature: {typed_name: Seed Signer}}
+        - {title: Discovery notes, status: sent, project_name: Website rebuild}
+
+  - name: a draft document is not found
+    as: client1
+    request: {method: GET, path: "/api/v1/portal/acme/documents/{d_draft}"}
+    expect: {status: 404, body: {error: not found}, exact: true}
+
+  - name: client opens a document to sign with its consent text
+    as: client1
+    request: {method: GET, path: "/api/v1/portal/acme/documents/{d_sow}"}
+    expect:
+      status: 200
+      body: {title: SOW, status: sent, consent_text: "I agree this is my electronic signature and I am authorised to sign for Client One."}
+
+  - name: another client's document, file and certificate are not found
+    as: [client2, beta_client, tenant, owner]
+    request: {method: GET, path: "/api/v1/portal/acme/documents/{d_msa}/certificate"}
+    expect: {status: 404, body: {error: not found}, exact: true}
+
+  - name: another client's document file is not found
+    as: [client2, beta_client]
+    request: {method: GET, path: "/api/v1/portal/acme/documents/{d_sow}/file"}
+    expect: {status: 404, body: {error: not found}, exact: true}
+
+  - name: certificate before signing is not found
+    as: client1
+    request: {method: GET, path: "/api/v1/portal/acme/documents/{d_sow}/certificate"}
+    expect: {status: 404, body: {error: not found}, exact: true}
+
+  - name: client downloads their document file
+    as: client1
+    request: {method: GET, path: "/api/v1/portal/acme/documents/{d_sow}/file"}
+    expect:
+      status: 200
+      headers: {Content-Type: application/pdf, X-Content-Type-Options: nosniff}
+
+  - name: client downloads their signing certificate
+    as: client1
+    request: {method: GET, path: "/api/v1/portal/acme/documents/{d_msa}/certificate"}
+    expect:
+      status: 200
+      headers: {Content-Type: application/pdf}
+
+  - name: client signs a sent document
+    as: client1
+    isolate: true
+    request:
+      method: POST
+      path: "/api/v1/portal/acme/documents/{d_sow}/sign"
+      body: {typed_name: Priya Nair, consent: true}
+    expect:
+      status: 200
+      body: {status: signed, signature: {typed_name: Priya Nair, email: client1@example.com}}
+
+  - name: signing an already signed document conflicts
+    as: client1
+    request:
+      method: POST
+      path: "/api/v1/portal/acme/documents/{d_msa}/sign"
+      body: {typed_name: Priya Nair, consent: true}
+    expect: {status: 409, body: {error: already signed}, exact: true}
+    unchanged: [document_signatures, client_documents]
+
+  - name: signing a withdrawn document conflicts
+    as: client1
+    request:
+      method: POST
+      path: "/api/v1/portal/acme/documents/{d_withdrawn}/sign"
+      body: {typed_name: Priya Nair, consent: true}
+    expect: {status: 409, body: {error: "document can't be changed in its current state"}, exact: true}
+    unchanged: [document_signatures, client_documents]
+
+  - name: signing needs a typed name
+    as: client1
+    request:
+      method: POST
+      path: "/api/v1/portal/acme/documents/{d_sow}/sign"
+      body: {typed_name: "   ", consent: true}
+    expect: {status: 422, body: {error: type your full name}, exact: true}
+    unchanged: [document_signatures, client_documents]
+
+  - name: signing needs consent
+    as: client1
+    request:
+      method: POST
+      path: "/api/v1/portal/acme/documents/{d_sow}/sign"
+      body: {typed_name: Priya Nair, consent: false}
+    expect: {status: 422, body: {error: tick the consent box to sign}, exact: true}
+    unchanged: [document_signatures, client_documents]
+
+  - name: a shared or draft document can't be signed
+    as: client1
+    request:
+      method: POST
+      path: "/api/v1/portal/acme/documents/{d_disc}/sign"
+      body: {typed_name: Priya Nair, consent: true}
+    expect: {status: 404, body: {error: not found}, exact: true}
+    unchanged: [document_signatures, client_documents]
+
+  - name: nobody else can sign a client's document
+    as: [client2, beta_client, tenant, owner]
+    request:
+      method: POST
+      path: "/api/v1/portal/acme/documents/{d_sow}/sign"
+      body: {typed_name: Mallory, consent: true}
+    expect: {status: 404, body: {error: not found}, exact: true}
+    unchanged: [document_signatures, client_documents]

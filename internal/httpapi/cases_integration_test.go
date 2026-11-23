@@ -12,9 +12,11 @@ import (
 	"time"
 
 	"shigoto/internal/auth"
+	"shigoto/internal/clients"
 	"shigoto/internal/core"
 	"shigoto/internal/httpapi/casefile"
 	"shigoto/internal/property"
+	"shigoto/internal/storage"
 	"shigoto/internal/testkit"
 )
 
@@ -200,7 +202,14 @@ func seedCaseWorld(t *testing.T, s casefile.Seed) *caseWorld {
 	}
 	for _, name := range sortedKeys(s.Projects) {
 		p := s.Projects[name]
-		ids[name] = e.Project(orgs[p.Org], ids[p.Client]).ID
+		var opts []testkit.ProjectOption
+		if p.Name != "" {
+			opts = append(opts, testkit.ProjectName(p.Name))
+		}
+		if p.Status != "" {
+			opts = append(opts, testkit.ProjectStatus(p.Status))
+		}
+		ids[name] = e.Project(orgs[p.Org], ids[p.Client], opts...).ID
 	}
 	for _, name := range sortedKeys(s.Tasks) {
 		tk := s.Tasks[name]
@@ -226,7 +235,14 @@ func seedCaseWorld(t *testing.T, s casefile.Seed) *caseWorld {
 			opts = append(opts, testkit.Issued(time.Now()))
 		}
 		ids[name] = e.Invoice(orgs[inv.Org], ids[inv.Contact], opts...).ID
+		if inv.Project != "" {
+			if _, err := e.Pool.Exec(e.Ctx, `UPDATE invoice_lines SET project_id = $1 WHERE invoice_id = $2`, ids[inv.Project], ids[name]); err != nil {
+				t.Fatalf("invoices.%s: project: %v", name, err)
+			}
+		}
 	}
+	store := storage.NewDisk(t.TempDir())
+	seedClientPortal(t, e, s, orgs, ids, users, store)
 	for _, name := range sortedKeys(s.Invites) {
 		inv := s.Invites[name]
 		var opts []testkit.InviteOption
@@ -236,12 +252,94 @@ func seedCaseWorld(t *testing.T, s casefile.Seed) *caseWorld {
 		ids[name] = e.Invite(orgs[inv.Org], inv.Email, auth.Role(inv.Role), inv.Token, opts...)
 	}
 
-	h := e.Handler(testkit.Modules(s.Modules))
+	h := e.Handler(testkit.Modules(s.Modules), testkit.Store(store))
 	tokens := map[string]string{casefile.Anonymous: ""}
 	for _, name := range sortedKeys(users) {
 		tokens[name] = e.Login(users[name], h).Token
 	}
 	return &caseWorld{env: e, h: h, ids: ids, tokens: tokens}
+}
+
+// seedClientPortal applies s's welcome notes, checklist items and client
+// documents. Documents reach their status through the real clients store
+// functions (send, withdraw, replace, sign), so seeded rows hold real
+// hashes, timestamps and signing certificates.
+func seedClientPortal(t *testing.T, e *testkit.Env, s casefile.Seed, orgs map[string]core.Org, ids map[string]int64, users map[string]testkit.User, store storage.Store) {
+	t.Helper()
+	ctx, pool := e.Ctx, e.Pool
+	actor := func(org core.Org) int64 {
+		var id int64
+		if err := pool.QueryRow(ctx, `SELECT user_id FROM memberships WHERE org_id = $1 AND role = 'owner' ORDER BY user_id LIMIT 1`, org.ID).Scan(&id); err != nil {
+			t.Fatalf("client portal seed needs an owner in %s: %v", org.Slug, err)
+		}
+		return id
+	}
+	for _, name := range sortedKeys(s.Welcome) {
+		c := s.Contacts[name]
+		if _, err := clients.PutWelcome(ctx, pool, orgs[c.Org].ID, ids[name], actor(orgs[c.Org]), s.Welcome[name]); err != nil {
+			t.Fatalf("welcome.%s: %v", name, err)
+		}
+	}
+	for _, name := range sortedKeys(s.Checklist) {
+		it := s.Checklist[name]
+		org := orgs[it.Org]
+		created, err := clients.CreateChecklistItem(ctx, pool, org.ID, ids[it.Contact], actor(org), clients.ChecklistItem{Action: it.Action})
+		if err != nil {
+			t.Fatalf("checklist.%s: %v", name, err)
+		}
+		ids[name] = created.ID
+		if it.Done {
+			if _, err := clients.SetChecklistDone(ctx, pool, org.ID, ids[it.Contact], actor(org), created.ID, true); err != nil {
+				t.Fatalf("checklist.%s: done: %v", name, err)
+			}
+		}
+	}
+	for _, name := range sortedKeys(s.Documents) {
+		doc := s.Documents[name]
+		org := orgs[doc.Org]
+		owner := actor(org)
+		body := fmt.Sprintf("%%PDF-1.4\n%% seed document %s\n%%%%EOF\n", name)
+		f, err := core.SaveFile(ctx, pool, store, org.ID, name+".pdf", strings.NewReader(body), clients.PDFPolicy)
+		if err != nil {
+			t.Fatalf("documents.%s: file: %v", name, err)
+		}
+		nd := clients.NewDocument{ContactID: ids[doc.Contact], Title: doc.Title, Kind: doc.Kind, Category: doc.Category}
+		if nd.Title == "" {
+			nd.Title = name
+		}
+		if doc.Project != "" {
+			pid := ids[doc.Project]
+			nd.ProjectID = &pid
+		}
+		created, err := clients.CreateDocument(ctx, pool, org.ID, owner, nd, f)
+		if err != nil {
+			t.Fatalf("documents.%s: %v", name, err)
+		}
+		ids[name] = created.ID
+		if doc.Status == "" || doc.Status == "draft" {
+			continue
+		}
+		// Send directly: the seed may send a signature document to a
+		// contact without a portal login.
+		if _, err := pool.Exec(ctx, `UPDATE client_documents SET status = 'sent', sent_at = now() WHERE id = $1`, created.ID); err != nil {
+			t.Fatalf("documents.%s: send: %v", name, err)
+		}
+		switch doc.Status {
+		case "withdrawn":
+			_, err = clients.WithdrawDocument(ctx, pool, org.ID, owner, created.ID)
+		case "superseded":
+			if _, err = pool.Exec(ctx, `UPDATE client_documents SET status = 'superseded' WHERE id = $1`, created.ID); err != nil {
+				break
+			}
+		case "signed":
+			signer := users[doc.Signer]
+			_, err = clients.Sign(ctx, pool, store, time.UTC, org.ID, ids[doc.Contact], created.ID, clients.SignInput{
+				UserID: signer.ID, Email: signer.Email, TypedName: "Seed Signer", IP: "192.0.2.1", Consent: true})
+		}
+		if err != nil {
+			t.Fatalf("documents.%s: %s: %v", name, doc.Status, err)
+		}
+	}
 }
 
 // runCase sends c's request as actor against w and checks the response.

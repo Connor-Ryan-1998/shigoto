@@ -22,6 +22,7 @@ import (
 	"shigoto/internal/billing"
 	"shigoto/internal/config"
 	"shigoto/internal/core"
+	"shigoto/internal/mail"
 	"shigoto/internal/storage"
 )
 
@@ -34,6 +35,8 @@ type Deps struct {
 	Billing *billing.Service
 	// Store holds uploaded file bytes.
 	Store storage.Store
+	// Mailer sends email; nil means email is disabled and senders skip.
+	Mailer *mail.Mailer
 }
 
 // Module is a feature module that contributes routes to the API, gated by

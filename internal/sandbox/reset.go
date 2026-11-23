@@ -64,6 +64,7 @@ func reset(ctx context.Context, tx pgx.Tx) error {
 		return err
 	}
 	for _, table := range []string{
+		"document_signatures", "client_documents", "client_checklist_items", "client_welcome",
 		"maintenance_availability", "maintenance_visits", "maintenance_events", "maintenance_pending_files", "maintenance_tickets",
 		"invites", "audit_log", "webhook_events", "memberships", "time_entries", "rent_periods",
 		"payments", "payouts", "expense_lines", "expenses", "invoice_lines", "invoices", "invoice_counters",

@@ -76,9 +76,19 @@ func Populate(ctx context.Context, pool *pgxpool.Pool, store storage.Store, toda
 
 func populateTransaction(ctx context.Context, tx pgx.Tx, store storage.Store, today time.Time, location *time.Location) (Result, error) {
 	var media []*core.Staged
+	// Client documents and certificates are stored during seeding (signing
+	// re-reads them), so they're tracked as keys rather than stages.
+	var documents []storage.Key
 	keepMedia := false
 	defer func() {
 		_ = tx.Rollback(context.Background()) // no-op after commit
+		if !keepMedia {
+			for _, key := range documents {
+				if err := store.Delete(context.Background(), key); err != nil {
+					slog.Error("discarding failed sandbox document", "org_id", key.OrgID, "error", err)
+				}
+			}
+		}
 		for _, staged := range media {
 			if err := staged.Abort(); err != nil {
 				slog.Error("discarding sandbox staged media", "error", err)
@@ -108,6 +118,10 @@ func populateTransaction(ctx context.Context, tx pgx.Tx, store storage.Store, to
 		if err := staged.Commit(ctx); err != nil {
 			return Result{}, fmt.Errorf("storing sandbox media (no changes committed): %w", err)
 		}
+	}
+	documents, err = seedClientPortal(ctx, tx, store, result.Orgs, today, location)
+	if err != nil {
+		return Result{}, fmt.Errorf("populate sandbox client portal (no changes committed): %w", err)
 	}
 	if err := tx.Commit(ctx); err != nil {
 		var serverError *pgconn.PgError

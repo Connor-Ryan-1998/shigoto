@@ -1,0 +1,106 @@
+# Staff client-portal management: welcome notes, the kickoff checklist and
+# documents for client contacts. Writes need contacts_write; reads need
+# invoices_read. Only kind=client contacts take these records. Multi-step
+# flows (send, sign, replace) stay in internal/clients integration tests.
+seed:
+  orgs: [acme, beta]
+  users:
+    owner: {org: acme, role: owner}
+    staff: {org: acme, role: staff}
+    keeper: {org: acme, role: bookkeeper}
+    client: {org: acme, role: client, contact: c_client}
+    beta_owner: {org: beta, role: owner}
+  contacts:
+    c_client: {org: acme, kind: client, name: Client One}
+    c_tenant: {org: acme, kind: tenant, name: Tina Tenant}
+    c_beta: {org: beta, kind: client, name: Beta Client}
+
+cases:
+  - name: owner reads an empty welcome note
+    as: owner
+    request: {method: GET, path: "/api/v1/orgs/acme/contacts/{c_client}/welcome"}
+    expect: {status: 200, body: {notes: "", updated_at: null}, exact: true}
+
+  - name: staff writes the welcome note
+    as: staff
+    isolate: true
+    request:
+      method: PUT
+      path: "/api/v1/orgs/acme/contacts/{c_client}/welcome"
+      body: {notes: "Slack #acme for day-to-day, 4 business hours"}
+    expect: {status: 200, body: {notes: "Slack #acme for day-to-day, 4 business hours"}}
+
+  - name: bookkeeper cannot write the welcome note
+    as: keeper
+    request:
+      method: PUT
+      path: "/api/v1/orgs/acme/contacts/{c_client}/welcome"
+      body: {notes: x}
+    expect: {status: 403}
+    unchanged: [client_welcome, audit_log]
+
+  - name: bookkeeper reads the checklist
+    as: keeper
+    request: {method: GET, path: "/api/v1/orgs/acme/contacts/{c_client}/checklist"}
+    expect: {status: 200, body: [], exact: true}
+
+  - name: welcome note for a tenant contact is refused
+    as: owner
+    request:
+      method: PUT
+      path: "/api/v1/orgs/acme/contacts/{c_tenant}/welcome"
+      body: {notes: x}
+    expect: {status: 422, body: {error: "contact must be a client"}, exact: true}
+    unchanged: [client_welcome, audit_log]
+
+  - name: another org's contact is not found
+    as: owner
+    request:
+      method: PUT
+      path: "/api/v1/orgs/acme/contacts/{c_beta}/welcome"
+      body: {notes: x}
+    expect: {status: 404, body: {error: not found}, exact: true}
+    unchanged: [client_welcome, audit_log]
+
+  # Same as every staff route: a portal role holds no staff permission.
+  - name: a client portal user cannot reach staff routes
+    as: client
+    request: {method: GET, path: "/api/v1/orgs/acme/contacts/{c_client}/welcome"}
+    expect: {status: 403}
+
+  - name: owner adds a checklist item
+    as: owner
+    isolate: true
+    request:
+      method: POST
+      path: "/api/v1/orgs/acme/contacts/{c_client}/checklist"
+      body: {action: "Grant admin access to Google Analytics", owner: "Sam (Acme)", due_date: "2026-11-25"}
+    expect:
+      status: 201
+      body: {action: "Grant admin access to Google Analytics", owner: "Sam (Acme)", due_date: "2026-11-25", done_at: null}
+
+  - name: checklist item needs an action
+    as: owner
+    request:
+      method: POST
+      path: "/api/v1/orgs/acme/contacts/{c_client}/checklist"
+      body: {action: "  ", owner: Sam}
+    expect: {status: 422, body: {error: "action is required"}, exact: true}
+    unchanged: [client_checklist_items, audit_log]
+
+  - name: checklist item rejects a malformed due date
+    as: owner
+    request:
+      method: POST
+      path: "/api/v1/orgs/acme/contacts/{c_client}/checklist"
+      body: {action: Do it, due_date: "25/11/2026"}
+    expect: {status: 422, body: {error: "due_date must be YYYY-MM-DD or null"}, exact: true}
+    unchanged: [client_checklist_items, audit_log]
+
+  - name: missing checklist item is not found
+    as: owner
+    request:
+      method: POST
+      path: "/api/v1/orgs/acme/contacts/{c_client}/checklist/99999999/done"
+      body: {done: true}
+    expect: {status: 404, body: {error: not found}, exact: true}

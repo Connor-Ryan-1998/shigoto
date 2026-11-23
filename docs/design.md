@@ -90,7 +90,7 @@ One small self-hosted app, shipped as one Go binary plus Postgres, that runs a m
 | Users | The user now, a few clients. RBAC open for adding staff later. |
 | Bank data | CSV import first, behind a pluggable import-source interface. |
 | Login | Staff use generic OIDC (Authentik in prod) **plus** local login. Tenants and clients use an email magic link or password against the app, with no Authentik. |
-| Portal | Yes, for tenants and clients. |
+| Portal | Yes, for tenants and clients. Clients get a hub (welcome notes, checklist, projects, documents) and sign staff-uploaded PDFs with a typed name and consent; see the client portal design spec. |
 | Mobile | Responsive web now. Native later, so the API comes first. |
 | DB | Postgres. |
 | UI | JSON API plus a JS SPA, built and embedded in the binary. |

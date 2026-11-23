@@ -1,0 +1,22 @@
+id: portal-sign
+component: PortalDocumentPage
+page: {org: acme, id: "2"}
+session: {role: client, perms: []}
+api:
+  GET /api/v1/portal/acme/documents/2:
+    {id: 2, project_id: null, project_name: "", title: SOW, kind: signature, category: general, status: sent, sent_at: null,
+     applies_to_all: false, file: {id: 1, mime: application/pdf, size_bytes: 1, original_name: sow.pdf}, signature: null,
+     consent_text: "I agree this is my electronic signature and I am authorised to sign for Client One."}
+ready: SOW
+open: Open SOW (PDF)
+fill: {Full legal name: Priya Nair, "I agree this is my electronic signature and I am authorised to sign for Client One.": "true"}
+submit: Sign document
+request: POST /api/v1/portal/acme/documents/2/sign
+contract:
+  blocks_duplicate_submit: true
+  preserves_input_on: 422
+  busy_dismiss_blocked: Cancel
+  dirty_navigation_blocked: true
+skip:
+  cancel: page editor; Cancel navigates back after the unsaved-changes check (covered by dirty_navigation_blocked)
+  dirty_dismiss_confirms: page editor, no dialog to dismiss; leaving is covered by dirty_navigation_blocked

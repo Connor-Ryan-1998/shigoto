@@ -216,3 +216,61 @@ func TestEffectiveRate(t *testing.T) {
 		t.Fatalf("EffectiveRate with override = %d, want override %d", got, override)
 	}
 }
+
+func TestProjectClientFieldsRoundTrip(t *testing.T) {
+	e := testkit.New(t)
+	pool, ctx := e.Pool, e.Ctx
+	org := e.Org("acme")
+	client := e.Contact(org, testkit.Name("A Client")).ID
+
+	p, err := timesheets.CreateProject(ctx, pool, org.ID, timesheets.Project{
+		ClientContactID: client, Name: "Site", HourlyRate: 15000, GSTCode: core.GST,
+		Summary: "Rebuild site", Goals: "Bookings live\nFast mobile", Stakeholders: "Priya Nair — Sponsor",
+	})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	got, err := timesheets.GetProject(ctx, pool, org.ID, p.ID)
+	if err != nil {
+		t.Fatalf("GetProject: %v", err)
+	}
+	if got.Summary != "Rebuild site" || got.Goals != "Bookings live\nFast mobile" || got.Stakeholders != "Priya Nair — Sponsor" {
+		t.Fatalf("round trip = %+v", got)
+	}
+
+	got.Summary, got.Goals, got.Stakeholders = "New", "One", "Sam — IT"
+	updated, err := timesheets.UpdateProject(ctx, pool, org.ID, p.ID, got)
+	if err != nil {
+		t.Fatalf("UpdateProject: %v", err)
+	}
+	if updated.Summary != "New" || updated.Goals != "One" || updated.Stakeholders != "Sam — IT" {
+		t.Fatalf("update = %+v", updated)
+	}
+
+	long := got
+	long.Summary = string(make([]rune, 4001))
+	if _, err := timesheets.UpdateProject(ctx, pool, org.ID, p.ID, long); !errors.Is(err, core.ErrInvalidInput) {
+		t.Fatalf("4001-char summary err = %v, want ErrInvalidInput", err)
+	}
+}
+
+func TestUpdateProjectClientLockedByDocuments(t *testing.T) {
+	e := testkit.New(t)
+	org := e.Org("acme")
+	a := e.Contact(org, testkit.Name("A")).ID
+	b := e.Contact(org, testkit.Name("B")).ID
+	p := e.Project(org, a)
+	var fileID int64
+	if err := e.Pool.QueryRow(e.Ctx, `INSERT INTO files (org_id, sha256, mime, size_bytes, original_name)
+		VALUES ($1, '\x01', 'application/pdf', 1, 'x.pdf') RETURNING id`, org.ID).Scan(&fileID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.Pool.Exec(e.Ctx, `INSERT INTO client_documents (org_id, contact_id, project_id, title, kind, file_id, file_sha256)
+		VALUES ($1, $2, $3, 'SOW', 'signature', $4, '\x01')`, org.ID, a, p.ID, fileID); err != nil {
+		t.Fatal(err)
+	}
+	p.ClientContactID = b
+	if _, err := timesheets.UpdateProject(e.Ctx, e.Pool, org.ID, p.ID, p); !errors.Is(err, core.ErrInvalidState) {
+		t.Fatalf("client change with documents err = %v, want ErrInvalidState", err)
+	}
+}

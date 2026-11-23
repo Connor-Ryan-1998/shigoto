@@ -33,6 +33,7 @@ func RegisterRoutes(mux *http.ServeMux, d module.Deps) {
 	})))
 	registerRentRoutes(mux, d)
 	registerMaintenanceRoutes(mux, d)
+	registerClientRoutes(mux, d)
 }
 
 func listOrgs(w http.ResponseWriter, r *http.Request, d module.Deps) {

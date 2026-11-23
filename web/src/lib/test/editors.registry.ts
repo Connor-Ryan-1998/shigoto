@@ -24,8 +24,14 @@ import RequestChangeDialog from '../modules/property/RequestChangeDialog.svelte'
 import PropertyNotesPage from '../../routes/[org]/properties/[id]/notes/+page.svelte';
 import StrataSection from '../modules/property/StrataSection.svelte';
 import StrataSchemeDialog from '../modules/property/StrataSchemeDialog.svelte';
+import PortalDocumentPage from '../../routes/portal/[org]/documents/[id]/+page.svelte';
+import WelcomeDialog from '../modules/clients/WelcomeDialog.svelte';
+import ChecklistItemDialog from '../modules/clients/ChecklistItemDialog.svelte';
 
 export const components = {
+	PortalDocumentPage,
+	ChecklistItemDialog,
+	WelcomeDialog,
 	AssignSupplierDialog,
 	NewTicketDialog,
 	RequestChangeDialog,

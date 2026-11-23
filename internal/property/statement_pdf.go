@@ -68,6 +68,10 @@ func WriteStatementPDF(w io.Writer, s Statement, loc *time.Location) error {
 	return pdf.Write(w)
 }
 
+// BaseLetter is baseLetter, exported for other PDF writers using the same
+// embedded fonts.
+func BaseLetter(r rune) rune { return baseLetter(r) }
+
 // baseLetter replaces a glyph the embedded Go fonts lack with its
 // unaccented base letter (ặ -> a), so names stay readable; anything with no
 // base letter falls back to gopdf's default substitute.

@@ -1,0 +1,27 @@
+# With the timesheets module off a client's hub has no projects and the
+# project route doesn't exist; welcome, checklist and documents still work.
+seed:
+  orgs: [acme]
+  modules: {timesheets: false}
+  users:
+    owner: {org: acme, role: owner}
+    client1: {org: acme, role: client, contact: c1}
+  contacts:
+    c1: {org: acme, kind: client, name: Client One}
+  projects:
+    p1: {org: acme, client: c1, name: Website rebuild}
+  welcome:
+    c1: "Email us"
+
+cases:
+  - name: hub without timesheets lists no projects
+    as: client1
+    request: {method: GET, path: /api/v1/portal/acme/hub}
+    expect:
+      status: 200
+      body: {welcome: {notes: "Email us"}, projects: []}
+
+  - name: project route is off without timesheets
+    as: client1
+    request: {method: GET, path: "/api/v1/portal/acme/projects/{p1}"}
+    expect: {status: 404}

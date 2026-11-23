@@ -52,6 +52,7 @@
 <PageHeader title="Contacts">
 	{#snippet actions()}{#if canWrite}<Button disabled={loaded !== key} onclick={() => edit(null)}>New contact</Button>{/if}{/snippet}
 </PageHeader>
+{#snippet contactName(contact: Contact)}{#if contact.kind === 'client'}<a class="link link-primary" href={`/${org}/contacts/${contact.id}`}>{contact.name}</a>{:else}{contact.name}{/if}{/snippet}
 {#snippet contactActions(contact: Contact)}<Button variant="secondary" size="sm" onclick={() => edit(contact)}>Edit {contact.name}</Button>{/snippet}
 {#if !canRead}
 	<p role="alert">You do not have permission to view contacts.</p>
@@ -60,7 +61,7 @@
 	{#if success}<p role="status" class="alert alert-success alert-soft mb-4">{success}</p>{/if}
 	<LoadState loading={loaded !== key} {error} loadingLabel="Loading contacts…" empty={contacts.length === 0} emptyTitle="No contacts found." onretry={() => load(org, filter)}>
 		<DataTable columns={[
-			{ key: 'name', label: 'Name' }, { key: 'kind', label: 'Kind' }, { key: 'email', label: 'Email' },
+			{ key: 'name', label: 'Name', cell: contactName }, { key: 'kind', label: 'Kind' }, { key: 'email', label: 'Email' },
 			{ key: 'phone', label: 'Phone' }, { key: 'company_name', label: 'Company' }, { key: 'abn', label: 'ABN' },
 			...(canWrite ? [{ key: 'actions', label: 'Actions', cell: contactActions }] : [])
 		]} rows={contacts} rowKey={(contact) => contact.id} />

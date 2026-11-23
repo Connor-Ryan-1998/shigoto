@@ -17,6 +17,11 @@ export type Project = {
 	billing_method: BillingMethod;
 	// Derived server-side: pending or in progress.
 	active: boolean;
+	// Client-facing details shown in the client portal. Goals and
+	// stakeholders hold one entry per line.
+	summary?: string;
+	goals?: string;
+	stakeholders?: string;
 };
 
 export type Task = { id: number; project_id: number; name: string; hourly_rate?: number; active: boolean };

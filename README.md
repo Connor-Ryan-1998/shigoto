@@ -15,6 +15,19 @@ Tenants invited from Members sign in by emailed link. With the property module o
 
 Staff manage repairs on each property's Maintenance tab; open repairs also appear on the dashboard. No notifications are sent yet: the ticket timeline is the record.
 
+## Client portal
+
+Client contacts invited from Members sign in by emailed link and land on a **Hub**:
+
+- **Welcome notes**: staff-written communication rules (channels, response times).
+- **Client action checklist**: what staff need before kickoff, with owner and due date. Staff tick items once they've confirmed them; clients only read.
+- **Projects** (timesheets module): status cards. A project page shows the client-facing summary, goals and stakeholders, its documents (To sign, Signed, Discovery, Shared) and its invoices.
+- **Documents**: everything shared with or sent to the client, across projects plus general documents such as an MSA.
+
+Staff manage this from the client page (Contacts → client name) and the project page. Upload a PDF as **needs signature** or **shared only**, then Send/Share it. Withdraw or replace a sent document; the client still sees the old one marked Withdrawn/Replaced. Signed documents can't be changed.
+
+**Signing.** The studio signs the PDF before uploading it. The client opens it, types their full legal name and ticks a consent box. Shigoto records name, email, time, IP, browser and the SHA-256 of the exact file, and stores a separate signing-certificate PDF; the uploaded file is never modified. With SMTP configured the client is emailed when a document needs signing, and owners plus the uploader when it's signed.
+
 ## Requirements
 
 Docker plus [go-task](https://taskfile.dev), with Go on the host. Node 24 is
@@ -304,6 +317,17 @@ and a spoken demo voice note. These fictional fixtures are bundled in the
 binary and written into `SHIGOTO_FILES_DIR`; population needs no media downloads
 or local encoders. The emergency phone is a fictional example, not an emergency
 service; **do not call it**.
+
+Sign in as `client@example.test` (in `sbx-property`) to exercise the client
+portal. The **Hub** shows welcome notes, a five-item checklist (two confirmed),
+project cards and a "needs your signature" banner. **Reporting setup** has a
+summary, goals, stakeholders, a **Statement of Work** to sign, discovery notes
+and a draft change request staff can see but the client can't. Documents also
+include a signed **Master Services Agreement** (with its signing certificate)
+and a withdrawn NDA. `client-beta@example.test` has one document to sign in
+`sbx-consulting`; `client-empty@example.test` sees an empty hub. Staff manage all
+of this from **Contacts → Client name** and the project page. The PDFs are
+generated fictional documents with no legal effect.
 
 River Cottage's **Rent** account also includes a written-off rent invoice and
 a separate write-off with partial recovery. Existing partial/full payments

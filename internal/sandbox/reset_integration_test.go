@@ -193,3 +193,37 @@ func TestPopulateRefusesExternalFileReference(t *testing.T) {
 		t.Fatal("shared file removed")
 	}
 }
+
+// A tester who adds client-portal records (welcome notes, checklist,
+// documents, a signature) to a sandbox org must still be able to reset it.
+func TestPopulateResetsClientPortalRecords(t *testing.T) {
+	e := testkit.New(t)
+	result := populateTest(t, e.Pool)
+	org := result.Orgs[0].ID
+	deps := addResetDependencies(t, e.Pool, org, "client-portal-reset@example.test")
+	var contact, project, doc, cert int64
+	if err := e.Pool.QueryRow(e.Ctx, `SELECT client_contact_id, id FROM projects WHERE org_id=$1 LIMIT 1`, org).Scan(&contact, &project); err != nil {
+		t.Fatal(err)
+	}
+	mustExec(t, e.Pool, `INSERT INTO client_welcome (org_id,contact_id,notes) VALUES ($1,$2,'Tester notes')
+		ON CONFLICT (org_id,contact_id) DO UPDATE SET notes=EXCLUDED.notes`, org, contact)
+	mustExec(t, e.Pool, `INSERT INTO client_checklist_items (org_id,contact_id,position,action) VALUES ($1,$2,99,'Tester item')`, org, contact)
+	if err := e.Pool.QueryRow(e.Ctx, `INSERT INTO client_documents (org_id,contact_id,project_id,title,kind,file_id,file_sha256,status)
+		VALUES ($1,$2,$3,'Tester SOW','signature',$4,decode('abcd','hex'),'signed') RETURNING id`, org, contact, project, deps.file).Scan(&doc); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.Pool.QueryRow(e.Ctx, `INSERT INTO files (org_id,sha256,mime,size_bytes,original_name)
+		VALUES ($1,decode('beef','hex'),'application/pdf',4,'certificate.pdf') RETURNING id`, org).Scan(&cert); err != nil {
+		t.Fatal(err)
+	}
+	mustExec(t, e.Pool, `INSERT INTO document_signatures (org_id,document_id,user_id,typed_name,email,consent_text,ip,file_sha256,certificate_file_id)
+		VALUES ($1,$2,$3,'Tester','t@example.test','consent','192.0.2.1',decode('abcd','hex'),$4)`, org, doc, deps.user, cert)
+
+	populateTest(t, e.Pool)
+	if got := count(t, e.Pool, `SELECT count(*) FROM client_documents WHERE id=$1`, doc); got != 0 {
+		t.Fatal("tester document survived the reset")
+	}
+	if got := count(t, e.Pool, `SELECT count(*) FROM client_checklist_items WHERE action='Tester item'`); got != 0 {
+		t.Fatal("tester checklist item survived the reset")
+	}
+}

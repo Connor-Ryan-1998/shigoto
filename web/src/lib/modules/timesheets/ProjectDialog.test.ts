@@ -25,7 +25,23 @@ describe('ProjectDialog', () => {
 		await vi.waitFor(() => expect(onsaved).toHaveBeenCalled());
 		expect(apiMock).toHaveBeenCalledWith('PUT', '/api/v1/orgs/acme/projects/5', {
 			name: 'Website', client_contact_id: 9, hourly_rate: 15050, gst_code: 'GST', status: 'completed',
-			description: 'Old', start_date: null, end_date: null, billing_method: 'fixed'
+			description: 'Old', start_date: null, end_date: null, billing_method: 'fixed',
+			summary: '', goals: '', stakeholders: ''
+		});
+	});
+
+	it('edits the client-facing summary, goals and stakeholders', async () => {
+		apiMock.mockResolvedValue(project);
+		const onsaved = vi.fn();
+		render(ProjectDialog, { open: true, org: 'acme', contacts, project: { ...project, summary: 'Old summary' }, onsaved });
+		expect((screen.getByLabelText('Client summary') as HTMLTextAreaElement).value).toBe('Old summary');
+		await fireEvent.input(screen.getByLabelText('Client summary'), { target: { value: 'Rebuild the site' } });
+		await fireEvent.input(screen.getByLabelText('Goals'), { target: { value: 'Bookings live\nFast mobile' } });
+		await fireEvent.input(screen.getByLabelText('Primary stakeholders'), { target: { value: 'Priya Nair — Sponsor' } });
+		await fireEvent.click(screen.getByRole('button', { name: 'Save project' }));
+		await vi.waitFor(() => expect(onsaved).toHaveBeenCalled());
+		expect(apiMock.mock.calls[0][2]).toMatchObject({
+			summary: 'Rebuild the site', goals: 'Bookings live\nFast mobile', stakeholders: 'Priya Nair — Sponsor'
 		});
 	});
 

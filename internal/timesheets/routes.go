@@ -202,6 +202,9 @@ type projectRequest struct {
 	StartDate       json.RawMessage `json:"start_date,omitempty"`
 	EndDate         json.RawMessage `json:"end_date,omitempty"`
 	BillingMethod   string          `json:"billing_method,omitempty"`
+	Summary         string          `json:"summary,omitempty"`
+	Goals           string          `json:"goals,omitempty"`
+	Stakeholders    string          `json:"stakeholders,omitempty"`
 }
 
 // projectUpdateRequest is a full replace: every field must be present, so
@@ -219,6 +222,12 @@ type projectUpdateRequest struct {
 	StartDate       json.RawMessage `json:"start_date"`
 	EndDate         json.RawMessage `json:"end_date"`
 	BillingMethod   *string         `json:"billing_method"`
+	// The client-facing fields are the exception to full replace: an
+	// omitted key keeps the stored value, so a client that predates them
+	// never wipes them.
+	Summary      *string `json:"summary"`
+	Goals        *string `json:"goals"`
+	Stakeholders *string `json:"stakeholders"`
 }
 
 type projectResponse struct {
@@ -233,6 +242,9 @@ type projectResponse struct {
 	EndDate         *string `json:"end_date"`
 	BillingMethod   string  `json:"billing_method"`
 	Active          bool    `json:"active"`
+	Summary         string  `json:"summary"`
+	Goals           string  `json:"goals"`
+	Stakeholders    string  `json:"stakeholders"`
 }
 
 // formatOptionalDate formats t as YYYY-MM-DD, or nil for no date.
@@ -272,6 +284,7 @@ func projectToResponse(p Project) projectResponse {
 		Status: p.Status, Description: p.Description,
 		StartDate: formatOptionalDate(p.StartDate), EndDate: formatOptionalDate(p.EndDate),
 		BillingMethod: p.BillingMethod, Active: p.Active,
+		Summary: p.Summary, Goals: p.Goals, Stakeholders: p.Stakeholders,
 	}
 }
 
@@ -341,6 +354,7 @@ func createProject(w http.ResponseWriter, r *http.Request, d module.Deps) {
 			HourlyRate: core.Cents(body.HourlyRate), GSTCode: gstCode,
 			Status: body.Status, Description: body.Description,
 			StartDate: startDate, EndDate: endDate, BillingMethod: body.BillingMethod,
+			Summary: body.Summary, Goals: body.Goals, Stakeholders: body.Stakeholders,
 		})
 		if err != nil {
 			return err
@@ -449,12 +463,29 @@ func updateProject(w http.ResponseWriter, r *http.Request, d module.Deps) {
 	var updated Project
 	err = module.RunInTx(r.Context(), d.Pool, func(tx pgx.Tx) error {
 		var err error
-		updated, err = UpdateProject(r.Context(), tx, p.OrgID, id, Project{
+		next := Project{
 			Name: *body.Name, ClientContactID: *body.ClientContactID,
 			HourlyRate: core.Cents(*body.HourlyRate), GSTCode: core.GSTCode(*body.GSTCode),
 			Status: *body.Status, Description: *body.Description,
 			StartDate: startDate, EndDate: endDate, BillingMethod: *body.BillingMethod,
-		})
+		}
+		if body.Summary == nil || body.Goals == nil || body.Stakeholders == nil {
+			existing, err := GetProject(r.Context(), tx, p.OrgID, id)
+			if err != nil {
+				return err
+			}
+			next.Summary, next.Goals, next.Stakeholders = existing.Summary, existing.Goals, existing.Stakeholders
+		}
+		if body.Summary != nil {
+			next.Summary = *body.Summary
+		}
+		if body.Goals != nil {
+			next.Goals = *body.Goals
+		}
+		if body.Stakeholders != nil {
+			next.Stakeholders = *body.Stakeholders
+		}
+		updated, err = UpdateProject(r.Context(), tx, p.OrgID, id, next)
 		if err != nil {
 			return err
 		}
