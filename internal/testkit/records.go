@@ -3,6 +3,7 @@
 package testkit
 
 import (
+	"bytes"
 	"fmt"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"shigoto/internal/core"
 	"shigoto/internal/payments"
 	"shigoto/internal/property"
+	"shigoto/internal/storage"
 	"shigoto/internal/timesheets"
 )
 
@@ -190,6 +192,13 @@ func SchemeName(n string) StrataSchemeOption {
 // CTSNumber sets the strata scheme's community titles scheme number.
 func CTSNumber(n string) StrataSchemeOption {
 	return func(s *property.StrataScheme) { s.CTSNumber = n }
+}
+
+// Positions sets the executive committee positions the org holds.
+func Positions(chairperson, secretary, treasurer bool) StrataSchemeOption {
+	return func(s *property.StrataScheme) {
+		s.IsChairperson, s.IsSecretary, s.IsTreasurer = chairperson, secretary, treasurer
+	}
 }
 
 // StrataScheme creates a strata scheme in org. Defaults: "Test CTS", no
@@ -516,4 +525,57 @@ func (e *Env) BillingService(opts ...BillingOption) *billing.Service {
 		opt(s)
 	}
 	return s
+}
+
+// StrataDocumentOption customises Env.StrataDocument.
+type StrataDocumentOption func(*strataDocConfig)
+
+type strataDocConfig struct {
+	doc property.StrataDocument
+	pdf []byte
+}
+
+// DocType sets the document type.
+func DocType(t property.StrataDocType) StrataDocumentOption {
+	return func(c *strataDocConfig) { c.doc.DocType = t }
+}
+
+// DocTitle sets the document title.
+func DocTitle(s string) StrataDocumentOption { return func(c *strataDocConfig) { c.doc.Title = s } }
+
+// DocDate sets the document date.
+func DocDate(d time.Time) StrataDocumentOption {
+	return func(c *strataDocConfig) { c.doc.DocumentDate = d }
+}
+
+// DocPDF sets the document's PDF bytes (default PDFPages(1)).
+func DocPDF(pdf []byte) StrataDocumentOption { return func(c *strataDocConfig) { c.pdf = pdf } }
+
+// StrataDocument saves a PDF into store and records it as a pending
+// document of scheme schemeID. Defaults: minutes titled "AGM 2024" dated
+// 2024-09-12, one page.
+func (e *Env) StrataDocument(store storage.Store, org core.Org, schemeID int64, opts ...StrataDocumentOption) property.StrataDocument {
+	e.T.Helper()
+	c := strataDocConfig{
+		doc: property.StrataDocument{DocType: property.DocMinutes, Title: "AGM 2024",
+			DocumentDate: time.Date(2024, 9, 12, 0, 0, 0, 0, time.UTC)},
+		pdf: PDFPages(1),
+	}
+	for _, opt := range opts {
+		opt(&c)
+	}
+	pages, err := property.PDFPageCount(c.pdf)
+	if err != nil {
+		e.T.Fatalf("counting fixture pages: %v", err)
+	}
+	f, err := core.SaveFile(e.Ctx, e.Pool, store, org.ID, "doc.pdf", bytes.NewReader(c.pdf), core.UploadPolicy{Allowed: map[string]bool{"application/pdf": true}})
+	if err != nil {
+		e.T.Fatalf("saving strata document file: %v", err)
+	}
+	c.doc.FileID, c.doc.PageCount = f.ID, pages
+	d, err := property.CreateStrataDocument(e.Ctx, e.Pool, org.ID, schemeID, c.doc)
+	if err != nil {
+		e.T.Fatalf("creating strata document: %v", err)
+	}
+	return d
 }

@@ -22,6 +22,7 @@ import (
 	"shigoto/internal/billing"
 	"shigoto/internal/config"
 	"shigoto/internal/core"
+	"shigoto/internal/llm"
 	"shigoto/internal/mail"
 	"shigoto/internal/storage"
 )
@@ -37,6 +38,12 @@ type Deps struct {
 	Store storage.Store
 	// Mailer sends email; nil means email is disabled and senders skip.
 	Mailer *mail.Mailer
+	// LLM is the strata assistant's model client; nil when the assistant
+	// is not configured.
+	LLM *llm.Client
+	// StrataKick wakes the strata document indexer after an upload or
+	// reindex. Nil is a no-op.
+	StrataKick func()
 }
 
 // Module is a feature module that contributes routes to the API, gated by

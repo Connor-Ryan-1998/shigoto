@@ -34,7 +34,11 @@ edge cases.
 ## Go
 
 Run with `task test` (unit) and `task test SUITE=integration` (needs compose
-Postgres).
+Postgres and SeaweedFS). S3 storage tests skip unless
+`SHIGOTO_TEST_S3_ENDPOINT` is set; the integration task starts the compose
+`storage` service and points it at `http://localhost:8333`. The storage
+backend contract (`internal/storage/contract_test.go`) runs against disk in
+the unit suite and against S3 in the integration suite.
 
 ### HTTP cases (`internal/httpapi/testdata/cases/*.yaml`)
 
@@ -62,8 +66,15 @@ cases:
 ```
 
 - **Seed kinds:** `orgs`, `modules`, `users`, `contacts`, `invoices`,
-  `strata_schemes`, `properties` (optional `strata_scheme` link), `leases`,
-  `projects`, `tasks`, `invites`, `settings`. The loader rejects unknown keys.
+  `strata_schemes` (optional `positions`), `strata_documents` (a generated
+  PDF on a seeded scheme; optional `type`, `title`, `date`, `pages`,
+  `status`), `properties` (optional `strata_scheme` link), `leases`,
+  `projects`, `tasks`, `invites`, `settings`, and `assistant: {reply: ...}`
+  (enables the strata assistant against a scripted model that always gives
+  `reply`). The loader rejects unknown keys.
+- **Uploads** are multipart, which cases cannot send: test them in Go with
+  `testkit.Session.Upload` (e.g.
+  `internal/property/routes_strata_documents_integration_test.go`).
 - **Interpolation:** `{name}` becomes a seeded record's ID. An unknown name
   fails the load. There are no other expressions.
 - **Writes:** a case that expects a successful write must set

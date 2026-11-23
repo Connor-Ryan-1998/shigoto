@@ -19,18 +19,30 @@ type loadCase struct {
 // loadWant lists the Config fields a case may check. A nil field is not
 // checked.
 type loadWant struct {
-	Listen         *string  `yaml:"listen"`
-	BaseURL        *string  `yaml:"base_url"`
-	Modules        []string `yaml:"modules"` // the exact set of enabled modules
-	Timezone       *string  `yaml:"timezone"`
-	Scheduler      *bool    `yaml:"scheduler"`
-	SMTPHost       *string  `yaml:"smtp_host"`
-	SMTPTLS        *string  `yaml:"smtp_tls"`
-	TrustedProxy   *string  `yaml:"trusted_proxy"` // "" means no proxy is trusted
-	OIDCConfigured *bool    `yaml:"oidc_configured"`
-	OIDCScopes     []string `yaml:"oidc_scopes"`
-	UploadMax      *int64   `yaml:"upload_max_bytes"`
-	UploadMinFree  *int64   `yaml:"upload_min_free_bytes"`
+	Listen          *string  `yaml:"listen"`
+	BaseURL         *string  `yaml:"base_url"`
+	Modules         []string `yaml:"modules"` // the exact set of enabled modules
+	Timezone        *string  `yaml:"timezone"`
+	Scheduler       *bool    `yaml:"scheduler"`
+	SMTPHost        *string  `yaml:"smtp_host"`
+	SMTPTLS         *string  `yaml:"smtp_tls"`
+	TrustedProxy    *string  `yaml:"trusted_proxy"` // "" means no proxy is trusted
+	OIDCConfigured  *bool    `yaml:"oidc_configured"`
+	OIDCScopes      []string `yaml:"oidc_scopes"`
+	UploadMax       *int64   `yaml:"upload_max_bytes"`
+	UploadMinFree   *int64   `yaml:"upload_min_free_bytes"`
+	Storage         *string  `yaml:"storage"`
+	S3Endpoint      *string  `yaml:"s3_endpoint"`
+	S3Region        *string  `yaml:"s3_region"`
+	S3Bucket        *string  `yaml:"s3_bucket"`
+	S3PathStyle     *bool    `yaml:"s3_path_style"`
+	S3Prefix        *string  `yaml:"s3_prefix"`
+	LLMConfigured   *bool    `yaml:"llm_configured"`
+	LLMModel        *string  `yaml:"llm_model"`
+	LLMExtract      *string  `yaml:"llm_extract_model"`
+	LLMPDFMode      *string  `yaml:"llm_pdf_mode"`
+	EmbedConfigured *bool    `yaml:"embed_configured"`
+	EmbedModel      *string  `yaml:"embed_model"`
 }
 
 func TestLoadTable(t *testing.T) {
@@ -121,6 +133,51 @@ func (w *loadWant) check(t *testing.T, label string, c Config) {
 	}
 	if w.UploadMinFree != nil {
 		eq("UploadMinFreeBytes", c.UploadMinFreeBytes, *w.UploadMinFree)
+	}
+	if w.Storage != nil {
+		eq("Storage", c.Storage, *w.Storage)
+	}
+	if w.S3Endpoint != nil {
+		eq("S3.Endpoint", c.S3.Endpoint, *w.S3Endpoint)
+	}
+	if w.S3Region != nil {
+		eq("S3.Region", c.S3.Region, *w.S3Region)
+	}
+	if w.S3Bucket != nil {
+		eq("S3.Bucket", c.S3.Bucket, *w.S3Bucket)
+	}
+	if w.S3PathStyle != nil {
+		eq("S3.PathStyle", c.S3.PathStyle, *w.S3PathStyle)
+	}
+	if w.S3Prefix != nil {
+		eq("S3.Prefix", c.S3.Prefix, *w.S3Prefix)
+	}
+	if w.LLMConfigured != nil {
+		eq("LLM configured", c.LLM != nil, *w.LLMConfigured)
+		eq("StrataAssistant", c.StrataAssistant(), *w.LLMConfigured)
+	}
+	if w.LLMModel != nil || w.LLMExtract != nil || w.LLMPDFMode != nil {
+		if c.LLM == nil {
+			t.Fatalf("%s: LLM = nil, want configured", label)
+		}
+		if w.LLMModel != nil {
+			eq("LLM.Model", c.LLM.Model, *w.LLMModel)
+		}
+		if w.LLMExtract != nil {
+			eq("LLM.ExtractModel", c.LLM.ExtractModel, *w.LLMExtract)
+		}
+		if w.LLMPDFMode != nil {
+			eq("LLM.PDFMode", c.LLM.PDFMode, *w.LLMPDFMode)
+		}
+	}
+	if w.EmbedConfigured != nil {
+		eq("Embed configured", c.Embed != nil, *w.EmbedConfigured)
+	}
+	if w.EmbedModel != nil {
+		if c.Embed == nil {
+			t.Fatalf("%s: Embed = nil, want configured", label)
+		}
+		eq("Embed.Model", c.Embed.Model, *w.EmbedModel)
 	}
 	if w.OIDCScopes != nil {
 		if c.OIDC == nil || !slices.Equal(c.OIDC.Scopes, w.OIDCScopes) {

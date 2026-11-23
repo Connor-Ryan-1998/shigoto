@@ -42,6 +42,58 @@ type SMTP struct {
 	TLS string
 }
 
+// S3 holds the S3-compatible object store settings used when
+// Config.Storage is "s3".
+type S3 struct {
+	// Endpoint is the absolute http(s) URL of the S3 API
+	// (SHIGOTO_S3_ENDPOINT).
+	Endpoint string
+	// Region is passed to request signing (SHIGOTO_S3_REGION, default
+	// "auto", which Cloudflare R2 expects).
+	Region          string
+	Bucket          string
+	AccessKeyID     string
+	SecretAccessKey string
+	// PathStyle selects path-style addressing (SHIGOTO_S3_PATH_STYLE,
+	// default true; SeaweedFS needs it).
+	PathStyle bool
+	// Prefix is prepended to every object key (SHIGOTO_S3_PREFIX), always
+	// ending in "/" when set, so one bucket can host several apps.
+	Prefix string
+}
+
+// LLM is the OpenAI-compatible chat endpoint used by the strata assistant
+// for document extraction and question answering. A nil *LLM on Config
+// means the assistant is disabled.
+type LLM struct {
+	// BaseURL is the API root, e.g. https://openrouter.ai/api/v1
+	// (SHIGOTO_LLM_BASE_URL); /chat/completions is appended.
+	BaseURL string
+	APIKey  string
+	// Model answers questions (SHIGOTO_LLM_MODEL).
+	Model string
+	// ExtractModel reads uploaded PDFs (SHIGOTO_LLM_EXTRACT_MODEL,
+	// default Model).
+	ExtractModel string
+	// PDFMode is how PDF pages reach ExtractModel
+	// (SHIGOTO_LLM_PDF_MODE): only "file" is supported; "image" is
+	// reserved.
+	PDFMode string
+}
+
+// Embed is the OpenAI-compatible embeddings endpoint. A nil *Embed means
+// strata search is full-text only. The endpoint must honour the
+// "dimensions" request parameter.
+type Embed struct {
+	BaseURL string
+	APIKey  string
+	Model   string
+	// QueryPrefix and DocumentPrefix are prepended to search queries and
+	// stored passages respectively, for models that embed them differently.
+	QueryPrefix    string
+	DocumentPrefix string
+}
+
 // Config is shigoto's runtime configuration.
 type Config struct {
 	Listen      string
@@ -49,6 +101,11 @@ type Config struct {
 	Modules     map[string]bool
 	FilesDir    string
 	BaseURL     string
+	// Storage selects the file store: "disk" (SHIGOTO_STORAGE default,
+	// under FilesDir) or "s3" (S3).
+	Storage string
+	// S3 is the object store configuration; zero unless Storage is "s3".
+	S3 S3
 	// UploadMaxBytes caps a maintenance media upload
 	// (SHIGOTO_UPLOAD_MAX_BYTES, default 1 GiB; 0 = unlimited). Document
 	// uploads keep their own fixed 10 MiB cap.
@@ -74,7 +131,15 @@ type Config struct {
 	// OIDC holds the generic OIDC staff-login configuration. nil means SSO
 	// is disabled ("sso": false in GET /api/v1/meta).
 	OIDC *OIDC
+	// LLM configures the strata assistant's model; nil disables it.
+	LLM *LLM
+	// Embed configures embeddings for strata search; nil means full-text
+	// search only. Requires LLM.
+	Embed *Embed
 }
+
+// StrataAssistant reports whether the strata assistant is configured.
+func (c Config) StrataAssistant() bool { return c.LLM != nil }
 
 // Load reads configuration from environment variables via getenv.
 func Load(getenv func(string) string) (Config, error) {
@@ -90,6 +155,9 @@ func Load(getenv func(string) string) (Config, error) {
 	}
 
 	var err error
+	if c.Storage, c.S3, err = loadStorage(getenv); err != nil {
+		return Config{}, err
+	}
 	if c.UploadMaxBytes, err = nonNegativeBytes(getenv, "SHIGOTO_UPLOAD_MAX_BYTES", 1<<30); err != nil {
 		return Config{}, err
 	}
@@ -171,6 +239,16 @@ func Load(getenv func(string) string) (Config, error) {
 	}
 	c.OIDC = oidcCfg
 
+	if c.LLM, err = loadLLM(getenv); err != nil {
+		return Config{}, err
+	}
+	if c.Embed, err = loadEmbed(getenv); err != nil {
+		return Config{}, err
+	}
+	if c.Embed != nil && c.LLM == nil {
+		return Config{}, fmt.Errorf("SHIGOTO_EMBED_* requires the SHIGOTO_LLM_* group: embeddings only serve the strata assistant")
+	}
+
 	if tp := getenv("SHIGOTO_TRUSTED_PROXY"); tp != "" {
 		_, cidr, err := net.ParseCIDR(tp)
 		if err != nil {
@@ -180,6 +258,56 @@ func Load(getenv func(string) string) (Config, error) {
 	}
 
 	return c, nil
+}
+
+// loadStorage reads SHIGOTO_STORAGE and, for "s3", the SHIGOTO_S3_*
+// variables. S3 variables are ignored for the disk backend.
+func loadStorage(getenv func(string) string) (string, S3, error) {
+	backend := getenv("SHIGOTO_STORAGE")
+	switch backend {
+	case "", "disk":
+		return "disk", S3{}, nil
+	case "s3":
+	default:
+		return "", S3{}, fmt.Errorf("invalid SHIGOTO_STORAGE %q (want \"disk\" or \"s3\")", backend)
+	}
+
+	s := S3{
+		Endpoint:        getenv("SHIGOTO_S3_ENDPOINT"),
+		Region:          getenv("SHIGOTO_S3_REGION"),
+		Bucket:          getenv("SHIGOTO_S3_BUCKET"),
+		AccessKeyID:     getenv("SHIGOTO_S3_ACCESS_KEY_ID"),
+		SecretAccessKey: getenv("SHIGOTO_S3_SECRET_ACCESS_KEY"),
+		Prefix:          getenv("SHIGOTO_S3_PREFIX"),
+		PathStyle:       true,
+	}
+	for _, req := range []struct{ name, value string }{
+		{"SHIGOTO_S3_ENDPOINT", s.Endpoint},
+		{"SHIGOTO_S3_BUCKET", s.Bucket},
+		{"SHIGOTO_S3_ACCESS_KEY_ID", s.AccessKeyID},
+		{"SHIGOTO_S3_SECRET_ACCESS_KEY", s.SecretAccessKey},
+	} {
+		if req.value == "" {
+			return "", S3{}, fmt.Errorf("%s is required when SHIGOTO_STORAGE=s3", req.name)
+		}
+	}
+	if u, err := url.Parse(s.Endpoint); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return "", S3{}, fmt.Errorf("SHIGOTO_S3_ENDPOINT must be an absolute http:// or https:// URL, got %q", s.Endpoint)
+	}
+	if s.Region == "" {
+		s.Region = "auto"
+	}
+	if v := getenv("SHIGOTO_S3_PATH_STYLE"); v != "" {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return "", S3{}, fmt.Errorf("invalid SHIGOTO_S3_PATH_STYLE %q (want true or false)", v)
+		}
+		s.PathStyle = b
+	}
+	if s.Prefix != "" && !strings.HasSuffix(s.Prefix, "/") {
+		s.Prefix += "/"
+	}
+	return "s3", s, nil
 }
 
 // loopbackSMTPHosts are the only hosts SHIGOTO_SMTP_TLS=none is accepted
@@ -309,4 +437,56 @@ func nonNegativeBytes(getenv func(string) string, name string, def int64) (int64
 		return 0, fmt.Errorf("%s must be a non-negative byte count, got %q", name, v)
 	}
 	return n, nil
+}
+
+// httpURL reports whether raw is an absolute http(s) URL with a host.
+func httpURL(raw string) bool {
+	u, err := url.Parse(raw)
+	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != ""
+}
+
+// endpointGroup reads <prefix>_BASE_URL, _API_KEY and _MODEL, which must be
+// all set or all unset. ok is false when all are unset.
+func endpointGroup(getenv func(string) string, prefix string) (base, key, model string, ok bool, err error) {
+	base, key, model = getenv(prefix+"_BASE_URL"), getenv(prefix+"_API_KEY"), getenv(prefix+"_MODEL")
+	if base == "" && key == "" && model == "" {
+		return "", "", "", false, nil
+	}
+	if base == "" || key == "" || model == "" {
+		return "", "", "", false, fmt.Errorf("%s_BASE_URL, %s_API_KEY and %s_MODEL must all be set, or none of them", prefix, prefix, prefix)
+	}
+	if !httpURL(base) {
+		return "", "", "", false, fmt.Errorf("%s_BASE_URL must be an absolute http:// or https:// URL, got %q", prefix, base)
+	}
+	return base, key, model, true, nil
+}
+
+func loadLLM(getenv func(string) string) (*LLM, error) {
+	base, key, model, ok, err := endpointGroup(getenv, "SHIGOTO_LLM")
+	if err != nil || !ok {
+		return nil, err
+	}
+	l := &LLM{BaseURL: base, APIKey: key, Model: model,
+		ExtractModel: getenv("SHIGOTO_LLM_EXTRACT_MODEL"), PDFMode: getenv("SHIGOTO_LLM_PDF_MODE")}
+	if l.ExtractModel == "" {
+		l.ExtractModel = model
+	}
+	switch l.PDFMode {
+	case "", "file":
+		l.PDFMode = "file"
+	case "image":
+		return nil, fmt.Errorf("SHIGOTO_LLM_PDF_MODE=image is reserved and not yet supported; use \"file\"")
+	default:
+		return nil, fmt.Errorf("invalid SHIGOTO_LLM_PDF_MODE %q (want \"file\")", l.PDFMode)
+	}
+	return l, nil
+}
+
+func loadEmbed(getenv func(string) string) (*Embed, error) {
+	base, key, model, ok, err := endpointGroup(getenv, "SHIGOTO_EMBED")
+	if err != nil || !ok {
+		return nil, err
+	}
+	return &Embed{BaseURL: base, APIKey: key, Model: model,
+		QueryPrefix: getenv("SHIGOTO_EMBED_QUERY_PREFIX"), DocumentPrefix: getenv("SHIGOTO_EMBED_DOCUMENT_PREFIX")}, nil
 }

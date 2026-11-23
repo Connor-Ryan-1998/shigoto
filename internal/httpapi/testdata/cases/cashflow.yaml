@@ -1,0 +1,43 @@
+seed:
+  orgs: [acme, foreign]
+  users:
+    owner: {org: acme, role: owner}
+    keeper: {org: acme, role: bookkeeper}
+    tenant: {org: acme, role: tenant, contact: c_tenant}
+    client: {org: acme, role: client, contact: c_client}
+  contacts:
+    c_tenant: {org: acme, kind: tenant, name: Tenant}
+    c_client: {org: acme, kind: client, name: Client}
+cases:
+  - name: readers see cash flow
+    as: [owner, keeper]
+    request: {method: GET, path: "/api/v1/orgs/acme/cash-flow?period=current"}
+    expect: {status: 200}
+  - name: previous cash flow is available
+    as: owner
+    request: {method: GET, path: "/api/v1/orgs/acme/cash-flow?period=previous"}
+    expect: {status: 200}
+  - name: anonymous cash flow denied
+    as: anonymous
+    request: {method: GET, path: /api/v1/orgs/acme/cash-flow}
+    expect: {status: 401, body: {error: unauthorized}, exact: true}
+  - name: portal roles cannot read staff cash flow
+    as: [tenant, client]
+    request: {method: GET, path: /api/v1/orgs/acme/cash-flow}
+    expect: {status: 403, body: {error: forbidden}, exact: true}
+  - name: foreign org cash flow denied
+    as: owner
+    request: {method: GET, path: /api/v1/orgs/foreign/cash-flow}
+    expect: {status: 404, body: {error: not found}, exact: true}
+  - name: invalid period denied
+    as: owner
+    request: {method: GET, path: "/api/v1/orgs/acme/cash-flow?period=wrong"}
+    expect: {status: 422, body: {error: period must be current or previous}, exact: true}
+  - name: empty period denied
+    as: owner
+    request: {method: GET, path: "/api/v1/orgs/acme/cash-flow?period="}
+    expect: {status: 422, body: {error: period must be current or previous}, exact: true}
+  - name: repeated period denied
+    as: owner
+    request: {method: GET, path: "/api/v1/orgs/acme/cash-flow?period=current&period=previous"}
+    expect: {status: 422, body: {error: period must be current or previous}, exact: true}

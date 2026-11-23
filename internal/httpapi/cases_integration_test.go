@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -15,6 +16,8 @@ import (
 	"shigoto/internal/clients"
 	"shigoto/internal/core"
 	"shigoto/internal/httpapi/casefile"
+	"shigoto/internal/llm"
+	"shigoto/internal/llm/llmtest"
 	"shigoto/internal/property"
 	"shigoto/internal/storage"
 	"shigoto/internal/testkit"
@@ -131,7 +134,38 @@ func seedCaseWorld(t *testing.T, s casefile.Seed) *caseWorld {
 		if sc.Name != "" {
 			opts = append(opts, testkit.SchemeName(sc.Name))
 		}
+		opts = append(opts, testkit.Positions(slices.Contains(sc.Positions, "chairperson"),
+			slices.Contains(sc.Positions, "secretary"), slices.Contains(sc.Positions, "treasurer")))
 		ids[name] = e.StrataScheme(orgs[sc.Org], opts...).ID
+	}
+	// Seeded documents live in a store the handler shares.
+	store := storage.NewDisk(t.TempDir())
+	for _, name := range sortedKeys(s.StrataDocuments) {
+		d := s.StrataDocuments[name]
+		pages := max(d.Pages, 1)
+		pdfPages := make([]string, pages)
+		for i := range pdfPages {
+			// The name keeps identical seeds from sharing one file.
+			pdfPages[i] = fmt.Sprintf("%s page %d", name, i+1)
+		}
+		opts := []testkit.StrataDocumentOption{testkit.DocPDF(testkit.PDF(pdfPages...))}
+		if d.Type != "" {
+			opts = append(opts, testkit.DocType(property.StrataDocType(d.Type)))
+		}
+		if d.Title != "" {
+			opts = append(opts, testkit.DocTitle(d.Title))
+		}
+		if d.Date != "" {
+			opts = append(opts, testkit.DocDate(testkit.Date(d.Date)))
+		}
+		org := orgs[s.StrataSchemes[d.Scheme].Org]
+		doc := e.StrataDocument(store, org, ids[d.Scheme], opts...)
+		if d.Status != "" {
+			if _, err := e.Pool.Exec(e.Ctx, `UPDATE strata_documents SET status = $1 WHERE id = $2`, d.Status, doc.ID); err != nil {
+				t.Fatalf("strata_documents.%s: status: %v", name, err)
+			}
+		}
+		ids[name] = doc.ID
 	}
 	for _, name := range sortedKeys(s.Properties) {
 		p := s.Properties[name]
@@ -252,7 +286,14 @@ func seedCaseWorld(t *testing.T, s casefile.Seed) *caseWorld {
 		ids[name] = e.Invite(orgs[inv.Org], inv.Email, auth.Role(inv.Role), inv.Token, opts...)
 	}
 
-	h := e.Handler(testkit.Modules(s.Modules), testkit.Store(store))
+	opts := []testkit.HandlerOption{testkit.Modules(s.Modules), testkit.Store(store)}
+	if s.Assistant != nil {
+		fake := llmtest.New(t)
+		reply := s.Assistant.Reply
+		fake.ChatFunc(func(map[string]any) llmtest.ChatScript { return llmtest.ChatScript{Content: reply} })
+		opts = append(opts, testkit.WithLLM(llm.New(fake.LLMConfig(), nil, http.DefaultClient), fake.LLMConfig()))
+	}
+	h := e.Handler(opts...)
 	tokens := map[string]string{casefile.Anonymous: ""}
 	for _, name := range sortedKeys(users) {
 		tokens[name] = e.Login(users[name], h).Token

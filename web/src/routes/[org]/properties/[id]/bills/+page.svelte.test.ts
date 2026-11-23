@@ -32,7 +32,9 @@ describe('property bills tab', () => {
 		render(Page);
 		const table = await screen.findByRole('table', { name: 'Bills FY2026–27' });
 		expect(within(table).getByText('Q1 rates')).toBeTruthy();
-		expect(within(table).getByRole('link', { name: 'rates.pdf' }).getAttribute('href')).toBe('/api/v1/orgs/acme/files/9');
+		const receipt = within(table).getByRole('link', { name: 'rates.pdf' });
+		expect(receipt.getAttribute('href')).toBe('/api/v1/orgs/acme/files/9');
+		expect(receipt.hasAttribute('data-sveltekit-reload')).toBe(true);
 		expect(within(table).getByRole('link', { name: 'View expense 11' }).getAttribute('href')).toBe('/acme/expenses/11');
 		expect(within(table).getByText('Capital')).toBeTruthy();
 		const totals = screen.getByRole('table', { name: 'Totals by category' });

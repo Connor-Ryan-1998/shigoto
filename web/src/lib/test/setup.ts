@@ -14,6 +14,19 @@ import { assertAllRouted, resetApiMock } from './mock-api';
 import { resetApp } from './app.svelte';
 import { session } from '../session.svelte';
 
+// LayerChart/Svelte motion read these browser APIs; jsdom has no layout.
+// Real resizing and chart rendering are covered by Playwright.
+window.matchMedia = (query) => ({
+	matches: false, media: query, onchange: null,
+	addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {},
+	dispatchEvent: () => true
+});
+globalThis.ResizeObserver = class {
+	observe() {}
+	unobserve() {}
+	disconnect() {}
+};
+
 vi.mock('../api', async (importOriginal) => {
 	const real = await importOriginal<typeof import('../api')>();
 	const { apiMock } = await import('./api-spy');

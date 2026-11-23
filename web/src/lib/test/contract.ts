@@ -109,18 +109,24 @@ const field = (name: string) => screen.getByLabelText(name, { exact: true }) as 
 const controls = (m: Mounted) =>
 	[...(m.form ?? m.dialog ?? document.body).querySelectorAll<HTMLInputElement>('input:not([type=hidden]), select, textarea')];
 
-// A checkbox is filled with "true" or "false"; everything else with its value.
+// A checkbox is filled with "true" or "false", a file input with a file of
+// that name (a minimal PDF), and everything else with its value.
 async function fill(e: Editor) {
 	for (const [name, value] of Object.entries(e.fill)) {
 		const el = field(name);
-		if (el.type === 'checkbox') {
+		if (el.type === 'file') {
+			const file = new File(['%PDF-1.4\n'], value, { type: 'application/pdf' });
+			Object.defineProperty(el, 'files', { value: [file], configurable: true });
+			await fireEvent.change(el);
+		} else if (el.type === 'checkbox') {
 			if (el.checked !== (value === 'true')) await fireEvent.click(el);
 		} else if (el.tagName === 'SELECT') await fireEvent.change(el, { target: { value } });
 		else await fireEvent.input(el, { target: { value } });
 	}
 }
 
-const valueOf = (el: HTMLInputElement) => (el.type === 'checkbox' ? String(el.checked) : el.value);
+const valueOf = (el: HTMLInputElement) =>
+	el.type === 'checkbox' ? String(el.checked) : el.type === 'file' ? (el.files?.[0]?.name ?? '') : el.value;
 
 // submit sends the form directly, as a user pressing Enter would, so a
 // guard that only disables the button can't hide a missing in-flight check.

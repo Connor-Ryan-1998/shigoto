@@ -12,7 +12,6 @@ import (
 	"shigoto/internal/config"
 	"shigoto/internal/db"
 	"shigoto/internal/sandbox"
-	"shigoto/internal/storage"
 )
 
 func adminPopulateSandbox(args []string) error {
@@ -36,7 +35,11 @@ func adminPopulateSandbox(args []string) error {
 	if err := db.Migrate(ctx, pool); err != nil {
 		return fmt.Errorf("migrating database: %w", err)
 	}
-	result, err := sandbox.Populate(ctx, pool, storage.NewDisk(cfg.FilesDir), time.Now().In(cfg.Location))
+	store, err := openStore(ctx, cfg)
+	if err != nil {
+		return fmt.Errorf("opening file store: %w", err)
+	}
+	result, err := sandbox.Populate(ctx, pool, store, time.Now().In(cfg.Location))
 	if err != nil {
 		return err
 	}

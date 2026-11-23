@@ -34,8 +34,11 @@ tasks:
   test-integration:
     internal: true
     cmds:
-      - docker compose up -d --wait db mailpit
-      - SHIGOTO_TEST_DATABASE_URL=postgres://shigoto:shigoto@localhost:5432/shigoto_test?sslmode=disable go test -race -tags integration -count=1 -timeout=10m {{.PACKAGES}}
+      - docker compose up -d --wait db mailpit storage
+      - SHIGOTO_TEST_S3_ENDPOINT=http://localhost:8333 SHIGOTO_TEST_DATABASE_URL=postgres://shigoto:shigoto@localhost:5432/shigoto_test?sslmode=disable go test -race -tags integration -count=1 -timeout=10m {{.PACKAGES}}
+      # Flush the suite's writes now: otherwise the next DROP DATABASE (the
+      # e2e stack's first step) pays for the checkpoint and can time out.
+      - docker compose exec -T db psql -q -U shigoto -d shigoto -c CHECKPOINT
 
   build:
     desc: Build the shigoto binary.

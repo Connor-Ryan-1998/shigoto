@@ -31,6 +31,16 @@ describe('api', () => {
 		expect(headers['X-Shigoto-CSRF']).toBe('1');
 	});
 
+	it('passes an abort signal to fetch', async () => {
+		vi.mocked(fetch).mockResolvedValue(jsonResponse(200, { ok: true }));
+		const controller = new AbortController();
+
+		await api('POST', '/api/v1/thing', { a: 1 }, { signal: controller.signal });
+
+		const [, init] = vi.mocked(fetch).mock.calls[0];
+		expect(init?.signal).toBe(controller.signal);
+	});
+
 	it('does not send the CSRF header on GET', async () => {
 		vi.mocked(fetch).mockResolvedValue(jsonResponse(200, { ok: true }));
 

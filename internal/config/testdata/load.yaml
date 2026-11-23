@@ -15,6 +15,9 @@
     oidc_configured: false
     upload_max_bytes: 1073741824
     upload_min_free_bytes: 5368709120
+    storage: disk
+    llm_configured: false
+    embed_configured: false
 
 - name: unknown module rejected
   env: {SHIGOTO_MODULES: "property,payroll"}
@@ -124,3 +127,150 @@
 - name: upload min free negative rejected
   env: {SHIGOTO_UPLOAD_MIN_FREE_BYTES: "-5"}
   err: SHIGOTO_UPLOAD_MIN_FREE_BYTES
+
+- name: storage s3 full
+  env: {SHIGOTO_STORAGE: s3, SHIGOTO_S3_ENDPOINT: "http://storage:8333", SHIGOTO_S3_BUCKET: shigoto, SHIGOTO_S3_ACCESS_KEY_ID: k, SHIGOTO_S3_SECRET_ACCESS_KEY: s}
+  want:
+    storage: s3
+    s3_endpoint: "http://storage:8333"
+    s3_region: auto
+    s3_bucket: shigoto
+    s3_path_style: true
+    s3_prefix: ""
+
+- name: storage s3 overrides
+  env: {SHIGOTO_STORAGE: s3, SHIGOTO_S3_ENDPOINT: "http://storage:8333", SHIGOTO_S3_BUCKET: shigoto, SHIGOTO_S3_ACCESS_KEY_ID: k, SHIGOTO_S3_SECRET_ACCESS_KEY: s, SHIGOTO_S3_REGION: ap-sydney-1, SHIGOTO_S3_PATH_STYLE: "false", SHIGOTO_S3_PREFIX: prod}
+  want:
+    storage: s3
+    s3_region: ap-sydney-1
+    s3_path_style: false
+    s3_prefix: prod/
+
+- name: storage s3 prefix keeps trailing slash
+  env: {SHIGOTO_STORAGE: s3, SHIGOTO_S3_ENDPOINT: "http://storage:8333", SHIGOTO_S3_BUCKET: shigoto, SHIGOTO_S3_ACCESS_KEY_ID: k, SHIGOTO_S3_SECRET_ACCESS_KEY: s, SHIGOTO_S3_PREFIX: prod/}
+  want:
+    s3_prefix: prod/
+
+- name: unknown storage rejected
+  env: {SHIGOTO_STORAGE: gcs}
+  err: SHIGOTO_STORAGE
+
+- name: s3 endpoint required
+  env: {SHIGOTO_STORAGE: s3, SHIGOTO_S3_ENDPOINT: "", SHIGOTO_S3_BUCKET: shigoto, SHIGOTO_S3_ACCESS_KEY_ID: k, SHIGOTO_S3_SECRET_ACCESS_KEY: s}
+  err: SHIGOTO_S3_ENDPOINT
+
+- name: s3 bucket required
+  env: {SHIGOTO_STORAGE: s3, SHIGOTO_S3_ENDPOINT: "http://storage:8333", SHIGOTO_S3_BUCKET: "", SHIGOTO_S3_ACCESS_KEY_ID: k, SHIGOTO_S3_SECRET_ACCESS_KEY: s}
+  err: SHIGOTO_S3_BUCKET
+
+- name: s3 access key required
+  env: {SHIGOTO_STORAGE: s3, SHIGOTO_S3_ENDPOINT: "http://storage:8333", SHIGOTO_S3_BUCKET: shigoto, SHIGOTO_S3_ACCESS_KEY_ID: "", SHIGOTO_S3_SECRET_ACCESS_KEY: s}
+  err: SHIGOTO_S3_ACCESS_KEY_ID
+
+- name: s3 secret key required
+  env: {SHIGOTO_STORAGE: s3, SHIGOTO_S3_ENDPOINT: "http://storage:8333", SHIGOTO_S3_BUCKET: shigoto, SHIGOTO_S3_ACCESS_KEY_ID: k, SHIGOTO_S3_SECRET_ACCESS_KEY: ""}
+  err: SHIGOTO_S3_SECRET_ACCESS_KEY
+
+- name: s3 endpoint must be absolute URL
+  env: {SHIGOTO_STORAGE: s3, SHIGOTO_S3_ENDPOINT: "storage:8333", SHIGOTO_S3_BUCKET: shigoto, SHIGOTO_S3_ACCESS_KEY_ID: k, SHIGOTO_S3_SECRET_ACCESS_KEY: s}
+  err: SHIGOTO_S3_ENDPOINT
+
+- name: s3 path style must be boolean
+  env: {SHIGOTO_STORAGE: s3, SHIGOTO_S3_ENDPOINT: "http://storage:8333", SHIGOTO_S3_BUCKET: shigoto, SHIGOTO_S3_ACCESS_KEY_ID: k, SHIGOTO_S3_SECRET_ACCESS_KEY: s, SHIGOTO_S3_PATH_STYLE: maybe}
+  err: SHIGOTO_S3_PATH_STYLE
+
+- name: disk ignores s3 vars
+  env: {SHIGOTO_S3_ENDPOINT: nonsense}
+  want:
+    storage: disk
+
+- name: LLM group configures the strata assistant
+  env:
+    SHIGOTO_LLM_BASE_URL: https://openrouter.ai/api/v1
+    SHIGOTO_LLM_API_KEY: k
+    SHIGOTO_LLM_MODEL: deepseek/deepseek-v4.1-flash
+  want:
+    llm_configured: true
+    llm_model: deepseek/deepseek-v4.1-flash
+    llm_extract_model: deepseek/deepseek-v4.1-flash
+    llm_pdf_mode: file
+    embed_configured: false
+
+- name: LLM extract model overrides the agent model
+  env:
+    SHIGOTO_LLM_BASE_URL: https://openrouter.ai/api/v1
+    SHIGOTO_LLM_API_KEY: k
+    SHIGOTO_LLM_MODEL: a
+    SHIGOTO_LLM_EXTRACT_MODEL: b
+  want: {llm_model: a, llm_extract_model: b}
+
+- name: partial LLM group rejected
+  env: {SHIGOTO_LLM_MODEL: deepseek/deepseek-v4.1-flash}
+  err: SHIGOTO_LLM
+
+- name: LLM image PDF mode is reserved
+  env:
+    SHIGOTO_LLM_BASE_URL: https://openrouter.ai/api/v1
+    SHIGOTO_LLM_API_KEY: k
+    SHIGOTO_LLM_MODEL: m
+    SHIGOTO_LLM_PDF_MODE: image
+  err: reserved
+
+- name: unknown LLM PDF mode rejected
+  env:
+    SHIGOTO_LLM_BASE_URL: https://openrouter.ai/api/v1
+    SHIGOTO_LLM_API_KEY: k
+    SHIGOTO_LLM_MODEL: m
+    SHIGOTO_LLM_PDF_MODE: bogus
+  err: SHIGOTO_LLM_PDF_MODE
+
+- name: LLM base URL must be http(s)
+  env:
+    SHIGOTO_LLM_BASE_URL: ftp://x
+    SHIGOTO_LLM_API_KEY: k
+    SHIGOTO_LLM_MODEL: m
+  err: SHIGOTO_LLM_BASE_URL
+
+- name: embed group configures embeddings
+  env:
+    SHIGOTO_LLM_BASE_URL: https://openrouter.ai/api/v1
+    SHIGOTO_LLM_API_KEY: k
+    SHIGOTO_LLM_MODEL: m
+    SHIGOTO_EMBED_BASE_URL: https://generativelanguage.googleapis.com/v1beta/openai/
+    SHIGOTO_EMBED_API_KEY: g
+    SHIGOTO_EMBED_MODEL: gemini-embedding-2
+  want: {llm_configured: true, embed_configured: true, embed_model: gemini-embedding-2}
+
+- name: partial embed group rejected
+  env:
+    SHIGOTO_LLM_BASE_URL: https://openrouter.ai/api/v1
+    SHIGOTO_LLM_API_KEY: k
+    SHIGOTO_LLM_MODEL: m
+    SHIGOTO_EMBED_MODEL: gemini-embedding-2
+  err: SHIGOTO_EMBED
+
+- name: embed group without LLM group rejected
+  env:
+    SHIGOTO_EMBED_BASE_URL: https://generativelanguage.googleapis.com/v1beta/openai/
+    SHIGOTO_EMBED_API_KEY: g
+    SHIGOTO_EMBED_MODEL: gemini-embedding-2
+  err: SHIGOTO_EMBED
+
+- name: embed base URL must be http(s)
+  env:
+    SHIGOTO_LLM_BASE_URL: https://openrouter.ai/api/v1
+    SHIGOTO_LLM_API_KEY: k
+    SHIGOTO_LLM_MODEL: m
+    SHIGOTO_EMBED_BASE_URL: not-a-url
+    SHIGOTO_EMBED_API_KEY: g
+    SHIGOTO_EMBED_MODEL: e
+  err: SHIGOTO_EMBED_BASE_URL
+
+- name: empty assistant settings from local Compose leave it disabled
+  env:
+    SHIGOTO_LLM_BASE_URL: ""
+    SHIGOTO_LLM_API_KEY: ""
+    SHIGOTO_LLM_MODEL: ""
+    SHIGOTO_LLM_PDF_MODE: file
+    SHIGOTO_EMBED_BASE_URL: ""
+  want: {llm_configured: false, embed_configured: false}

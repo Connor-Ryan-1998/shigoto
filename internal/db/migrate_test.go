@@ -68,3 +68,24 @@ func TestCoreConstraints(t *testing.T) {
 		t.Fatal("expected error inserting duplicate (org_id, number) invoice, got nil")
 	}
 }
+
+func TestMigrateInstallsPgvector(t *testing.T) {
+	pool := TestPool(t)
+	ctx := context.Background()
+
+	var version string
+	if err := pool.QueryRow(ctx, "SELECT extversion FROM pg_extension WHERE extname = 'vector'").Scan(&version); err != nil {
+		t.Fatalf("reading pgvector version: %v", err)
+	}
+	if version == "" {
+		t.Fatal("pgvector extension version is empty")
+	}
+
+	var dist float64
+	if err := pool.QueryRow(ctx, "SELECT '[1,2,3]'::public.vector(3) <=> '[1,2,4]'::public.vector(3)").Scan(&dist); err != nil {
+		t.Fatalf("computing cosine distance: %v", err)
+	}
+	if dist <= 0 {
+		t.Fatalf("cosine distance = %v, want > 0", dist)
+	}
+}

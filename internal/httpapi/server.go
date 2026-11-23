@@ -20,6 +20,7 @@ import (
 	"shigoto/internal/clients"
 	"shigoto/internal/config"
 	"shigoto/internal/core"
+	"shigoto/internal/llm"
 	"shigoto/internal/mail"
 	"shigoto/internal/module"
 	"shigoto/internal/payments"
@@ -59,6 +60,10 @@ type Deps struct {
 	// handle a nil Mailer by skipping the send, not erroring: the invite
 	// link is still returned to the caller so it can be shared by hand.
 	Mailer *mail.Mailer
+	// LLM is the strata assistant's model client; nil disables it.
+	LLM *llm.Client
+	// StrataKick wakes the strata document indexer; nil is a no-op.
+	StrataKick func()
 	// Store holds uploaded file bytes. It defaults to a disk store at
 	// Cfg.FilesDir.
 	Store storage.Store
@@ -164,7 +169,7 @@ func New(d Deps) http.Handler {
 			createPortalInvite(w, r, d)
 		})))
 
-	md := module.Deps{Pool: d.Pool, Auth: d.Auth, Cfg: d.Cfg, Billing: d.Billing, Store: d.Store, Mailer: d.Mailer}
+	md := module.Deps{Pool: d.Pool, Auth: d.Auth, Cfg: d.Cfg, Billing: d.Billing, Store: d.Store, Mailer: d.Mailer, LLM: d.LLM, StrataKick: d.StrataKick}
 	portal.RegisterRoutes(mux, md)
 	// Client portal management is core: always on.
 	clients.RegisterRoutes(mux, md)
@@ -183,7 +188,7 @@ func New(d Deps) http.Handler {
 	}
 
 	mux.HandleFunc("GET /api/v1/meta", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]any{"modules": enabled, "sso": d.Auth.OIDCEnabled()})
+		writeJSON(w, http.StatusOK, map[string]any{"modules": enabled, "sso": d.Auth.OIDCEnabled(), "strata_assistant": d.Cfg.StrataAssistant()})
 	})
 
 	return csrfMiddleware(d.Cfg.BaseURL, routeWebUI(mux))

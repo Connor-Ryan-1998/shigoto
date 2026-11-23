@@ -49,6 +49,36 @@ export const STRATA_POSITIONS: { value: StrataPosition; label: string; field: 'i
 	{ value: 'treasurer', label: 'Treasurer', field: 'is_treasurer' }
 ];
 
+export type StrataDocType =
+	| 'minutes' | 'by_laws' | 'cms' | 'levy_notice' | 'budget' | 'financial_statement' | 'sinking_fund_forecast' | 'other';
+
+export const STRATA_DOC_TYPES: { value: StrataDocType; label: string }[] = [
+	{ value: 'minutes', label: 'Minutes' },
+	{ value: 'by_laws', label: 'By-laws' },
+	{ value: 'cms', label: 'Community management statement' },
+	{ value: 'levy_notice', label: 'Levy notice' },
+	{ value: 'budget', label: 'Budget' },
+	{ value: 'financial_statement', label: 'Financial statement' },
+	{ value: 'sinking_fund_forecast', label: 'Sinking fund forecast' },
+	{ value: 'other', label: 'Other' }
+];
+
+export const strataDocTypeLabel = (t: StrataDocType) => STRATA_DOC_TYPES.find((d) => d.value === t)?.label ?? t;
+
+// A StrataMax document uploaded to a scheme and its indexing state.
+export type StrataDocument = {
+	id: number;
+	doc_type: StrataDocType;
+	title: string;
+	document_date: string;
+	status: 'pending' | 'extracting' | 'indexed' | 'failed';
+	error: string;
+	page_count: number;
+	extract_model: string;
+	chunks_total: number;
+	chunks_embedded: number;
+};
+
 // strataCtsError maps a rejected scheme save to a CTS number field error, or
 // null when the message is not about the CTS number.
 export const strataCtsError = (message: string) =>

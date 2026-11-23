@@ -7,6 +7,7 @@
 	import ChairpersonCard from '../../../../../lib/modules/property/strata/ChairpersonCard.svelte';
 	import SecretaryCard from '../../../../../lib/modules/property/strata/SecretaryCard.svelte';
 	import TreasurerCard from '../../../../../lib/modules/property/strata/TreasurerCard.svelte';
+	import DocumentsCard from '../../../../../lib/modules/property/strata/DocumentsCard.svelte';
 	import type { StrataScheme } from '../../../../../lib/modules/property/types';
 
 	const org = $derived(page.params.org ?? '');
@@ -14,6 +15,7 @@
 	const scope = $derived(`${org}/${id}`);
 	const member = $derived(session.currentOrg?.slug === org ? session.currentOrg : null);
 	const canRead = $derived(member?.perms.includes('property_read') ?? false);
+	const canWrite = $derived(member?.perms.includes('property_write') ?? false);
 	const details = $derived(`/${org}/properties/${id}`);
 
 	let scheme = $state<StrataScheme | null>(null);
@@ -69,6 +71,7 @@
 						{#if scheme.is_secretary}<SecretaryCard {org} {scheme} />{/if}
 						{#if scheme.is_treasurer}<TreasurerCard {org} {scheme} />{/if}
 					</div>
+					{#if scheme.is_chairperson || scheme.is_treasurer}<DocumentsCard {org} {scheme} {canWrite} />{/if}
 				{/if}
 			</div>
 		{/if}

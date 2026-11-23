@@ -18,6 +18,7 @@ import (
 	"shigoto/internal/config"
 	"shigoto/internal/db"
 	"shigoto/internal/httpapi"
+	"shigoto/internal/llm"
 	"shigoto/internal/mail"
 	"shigoto/internal/payments"
 	"shigoto/internal/storage"
@@ -46,6 +47,9 @@ type handlerConfig struct {
 	authOptions []auth.Option
 	getEnv      func(string) string
 	store       storage.Store
+	llm         *llm.Client
+	llmCfg      *config.LLM
+	strataKick  func()
 }
 
 // HandlerOption customises the handler Env.Handler builds.
@@ -103,6 +107,18 @@ func AuthOptions(opts ...auth.Option) HandlerOption {
 	return func(c *handlerConfig) { c.authOptions = append(c.authOptions, opts...) }
 }
 
+// WithLLM gives the handler a strata assistant model client (normally
+// pointed at an llmtest fake) and enables the assistant in its config.
+func WithLLM(c *llm.Client, cfg config.LLM) HandlerOption {
+	return func(h *handlerConfig) { h.llm, h.llmCfg = c, &cfg }
+}
+
+// StrataKick sets the function upload and reindex call to wake the
+// indexer.
+func StrataKick(fn func()) HandlerOption {
+	return func(c *handlerConfig) { c.strataKick = fn }
+}
+
 // Handler builds the full production HTTP handler over e's database. By
 // default every config.Known module is enabled, GetEnv returns "", auth
 // uses insecure (non-Secure) cookies and uploaded files are stored in a
@@ -123,12 +139,14 @@ func (e *Env) Handler(opts ...HandlerOption) http.Handler {
 		Auth: auth.New(e.Pool, false, c.authOptions...),
 		Cfg: config.Config{
 			Modules: c.modules, BaseURL: "https://shigoto.example", FilesDir: e.T.TempDir(),
-			UploadMaxBytes: 1 << 30, UploadMinFreeBytes: 1 << 20,
+			UploadMaxBytes: 1 << 30, UploadMinFreeBytes: 1 << 20, LLM: c.llmCfg,
 		},
-		Store:    c.store,
-		GetEnv:   c.getEnv,
-		Payments: c.payments,
-		Billing:  c.billing,
-		Mailer:   c.mailer,
+		Store:      c.store,
+		GetEnv:     c.getEnv,
+		Payments:   c.payments,
+		Billing:    c.billing,
+		Mailer:     c.mailer,
+		LLM:        c.llm,
+		StrataKick: c.strataKick,
 	})
 }

@@ -11,7 +11,9 @@ const scheme = (held: Partial<Record<'is_chairperson' | 'is_secretary' | 'is_tre
 	properties: [{ id: 1, name: 'Cottage' }], ...held, ...extra
 });
 const prop = (id: number, name: string, strata_scheme: unknown) => ({ id, name, strata_scheme });
-const roleHeadings = () => screen.queryAllByRole('heading', { level: 3 }).map((h) => h.textContent);
+const roleHeadings = () =>
+	screen.queryAllByRole('heading', { level: 3 }).map((h) => h.textContent).filter((t) => t !== 'Documents');
+const docs = (id = 3) => ({ [`GET /api/v1/orgs/acme/strata-schemes/${id}/documents`]: [] });
 
 beforeEach(() => {
 	setPage({ params: { org: 'acme', id: '1' } });
@@ -20,23 +22,24 @@ beforeEach(() => {
 
 describe('strata tab', () => {
 	it('renders a card per held position in order', async () => {
-		mockApi({ [`GET ${base}/1`]: prop(1, 'Cottage', scheme({ is_treasurer: true, is_secretary: true })) });
+		mockApi({ [`GET ${base}/1`]: prop(1, 'Cottage', scheme({ is_treasurer: true, is_secretary: true })), ...docs() });
 		render(Page);
 		expect(await screen.findByRole('heading', { name: 'Harbour View CTS' })).toBeTruthy();
 		expect(screen.getByText('CTS 12345')).toBeTruthy();
 		expect(roleHeadings()).toEqual(['Secretary', 'Treasurer']);
-		expect(screen.getAllByText('Duties for this role will appear here.')).toHaveLength(2);
+		expect(screen.getAllByText('Duties for this role will appear here.')).toHaveLength(1);
+		expect(screen.getByText('The assistant is not configured.')).toBeTruthy();
 	});
 
 	it('renders all three when every position is held', async () => {
-		mockApi({ [`GET ${base}/1`]: prop(1, 'Cottage', scheme({ is_chairperson: true, is_secretary: true, is_treasurer: true })) });
+		mockApi({ [`GET ${base}/1`]: prop(1, 'Cottage', scheme({ is_chairperson: true, is_secretary: true, is_treasurer: true })), ...docs() });
 		render(Page);
 		await screen.findByRole('heading', { name: 'Harbour View CTS' });
 		expect(roleHeadings()).toEqual(['Chairperson', 'Secretary', 'Treasurer']);
 	});
 
 	it('lists other properties in the scheme', async () => {
-		mockApi({ [`GET ${base}/1`]: prop(1, 'Cottage', scheme({ is_chairperson: true }, { cts_number: '', properties: [{ id: 1, name: 'Cottage' }, { id: 2, name: 'Unit 2' }] })) });
+		mockApi({ [`GET ${base}/1`]: prop(1, 'Cottage', scheme({ is_chairperson: true }, { cts_number: '', properties: [{ id: 1, name: 'Cottage' }, { id: 2, name: 'Unit 2' }] })), ...docs() });
 		render(Page);
 		expect(await screen.findByText('Shared with: Unit 2')).toBeTruthy();
 		expect(screen.getByText('No CTS number')).toBeTruthy();
@@ -59,13 +62,33 @@ describe('strata tab', () => {
 
 	it('ignores a stale response after switching property', async () => {
 		const slow = deferred();
-		mockApi({ [`GET ${base}/1`]: slow.promise, [`GET ${base}/2`]: prop(2, 'Flat', scheme({ is_treasurer: true }, { name: 'Flat CTS' })) });
+		mockApi({ [`GET ${base}/1`]: slow.promise, [`GET ${base}/2`]: prop(2, 'Flat', scheme({ is_treasurer: true }, { name: 'Flat CTS' })), ...docs() });
 		render(Page);
 		setPage({ params: { org: 'acme', id: '2' } });
 		expect(await screen.findByRole('heading', { name: 'Flat CTS' })).toBeTruthy();
 		slow.resolve(prop(1, 'Cottage', scheme({ is_chairperson: true })));
 		await waitFor(() => expect(roleHeadings()).toEqual(['Treasurer']));
 		expect(screen.queryByRole('heading', { name: 'Harbour View CTS' })).toBeNull();
+	});
+
+	it('shows the documents card only for chairperson or treasurer', async () => {
+		mockApi({ [`GET ${base}/1`]: prop(1, 'Cottage', scheme({ is_secretary: true })) });
+		const { unmount } = render(Page);
+		await screen.findByRole('heading', { name: 'Harbour View CTS' });
+		expect(screen.queryByRole('heading', { name: 'Documents' })).toBeNull();
+		unmount();
+		mockApi({ [`GET ${base}/1`]: prop(1, 'Cottage', scheme({ is_treasurer: true })), ...docs() });
+		render(Page);
+		expect(await screen.findByRole('heading', { name: 'Documents' })).toBeTruthy();
+		expect(await screen.findByText('No documents yet')).toBeTruthy();
+	});
+
+	it('hides document uploads without property_write', async () => {
+		signIn({ role: 'bookkeeper', perms: ['property_read'] });
+		mockApi({ [`GET ${base}/1`]: prop(1, 'Cottage', scheme({ is_chairperson: true })), ...docs() });
+		render(Page);
+		await screen.findByText('No documents yet');
+		expect(screen.queryByRole('button', { name: 'Upload document' })).toBeNull();
 	});
 
 	it('denies without property_read', async () => {

@@ -68,7 +68,9 @@ func reset(ctx context.Context, tx pgx.Tx) error {
 		"maintenance_availability", "maintenance_visits", "maintenance_events", "maintenance_pending_files", "maintenance_tickets",
 		"invites", "audit_log", "webhook_events", "memberships", "time_entries", "rent_periods",
 		"payments", "payouts", "expense_lines", "expenses", "invoice_lines", "invoices", "invoice_counters",
-		"leases", "project_tasks", "projects", "properties", "strata_schemes", "bank_lines", "bank_imports", "bank_accounts",
+		// Strata documents before their schemes and files; pages, chunks,
+		// motions and figures cascade from the document.
+		"leases", "project_tasks", "projects", "properties", "strata_documents", "strata_schemes", "bank_lines", "bank_imports", "bank_accounts",
 		"files", "categories", "contacts",
 	} {
 		if _, err := tx.Exec(ctx, `DELETE FROM `+pgx.Identifier{table}.Sanitize()+` WHERE org_id IN (SELECT org_id FROM sandbox_orgs)`); err != nil {

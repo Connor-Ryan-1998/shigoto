@@ -27,6 +27,7 @@ import StrataSchemeDialog from '../modules/property/StrataSchemeDialog.svelte';
 import PortalDocumentPage from '../../routes/portal/[org]/documents/[id]/+page.svelte';
 import WelcomeDialog from '../modules/clients/WelcomeDialog.svelte';
 import ChecklistItemDialog from '../modules/clients/ChecklistItemDialog.svelte';
+import StrataDocumentDialog from '../modules/property/strata/StrataDocumentDialog.svelte';
 
 export const components = {
 	PortalDocumentPage,
@@ -54,6 +55,7 @@ export const components = {
 	PropertyDetailsPage,
 	PropertyNotesPage,
 	SettingsPage,
+	StrataDocumentDialog,
 	StrataSchemeDialog,
 	StrataSection
 } as const;

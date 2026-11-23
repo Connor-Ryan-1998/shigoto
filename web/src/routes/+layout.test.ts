@@ -111,4 +111,22 @@ describe('root layout', () => {
 			)
 		);
 	});
+
+	it('records whether the strata assistant is configured from /meta', async () => {
+		const me = { user: { id: 1, email: 'staffer@example.com', name: 'Staffer' }, orgs: [] };
+		vi.stubGlobal(
+			'fetch',
+			vi.fn((path: RequestInfo | URL) => {
+				const url = typeof path === 'string' ? path : path.toString();
+				if (url.endsWith('/api/v1/meta')) return Promise.resolve(jsonResponse(200, { modules: [], sso: false, strata_assistant: true }));
+				if (url.endsWith('/api/v1/me')) return Promise.resolve(jsonResponse(200, me));
+				return Promise.resolve(jsonResponse(404, { error: 'not found' }));
+			})
+		);
+		session.setStrataAssistant(false);
+
+		render(Layout, { children: childSnippet() });
+
+		await waitFor(() => expect(session.strataAssistant).toBe(true));
+	});
 });
