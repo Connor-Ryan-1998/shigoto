@@ -57,6 +57,9 @@
 			const created = await api<{ id: number }>('POST', `/api/v1/orgs/${slug}/quotes`, body);
 			if (token !== seq || slug !== org) return;
 			dirty = false;
+			// Not busy any more: the unsaved-changes guard blocks leaving
+			// while a save is in flight.
+			saving = false;
 			await goto(`/${slug}/quotes/${created.id}`);
 		} catch (e) {
 			if (token === seq) saveError = e instanceof ApiError ? e.message : 'Could not save the quote.';

@@ -63,7 +63,12 @@ func reset(ctx context.Context, tx pgx.Tx) error {
 	if _, err := tx.Exec(ctx, `UPDATE leases SET bond_invoice_id=NULL, opening_arrears_invoice_id=NULL WHERE org_id IN (SELECT org_id FROM sandbox_orgs)`); err != nil {
 		return err
 	}
+	// Sandbox orgs never keep a logo, but clear any so files can go.
+	if _, err := tx.Exec(ctx, `UPDATE orgs SET logo_file_id=NULL WHERE id IN (SELECT org_id FROM sandbox_orgs)`); err != nil {
+		return err
+	}
 	for _, table := range []string{
+		"quote_attachments", "quote_lines", "quotes", "quote_counters",
 		"document_signatures", "client_documents", "client_checklist_items", "client_welcome",
 		"maintenance_availability", "maintenance_visits", "maintenance_events", "maintenance_pending_files", "maintenance_tickets",
 		"invites", "audit_log", "webhook_events", "memberships", "time_entries", "rent_periods",

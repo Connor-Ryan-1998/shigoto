@@ -123,6 +123,11 @@ func populateTransaction(ctx context.Context, tx pgx.Tx, store storage.Store, to
 	if err != nil {
 		return Result{}, fmt.Errorf("populate sandbox client portal (no changes committed): %w", err)
 	}
+	quoteFiles, err := seedQuotes(ctx, tx, store, result.Orgs, today)
+	documents = append(documents, quoteFiles...)
+	if err != nil {
+		return Result{}, fmt.Errorf("populate sandbox quotes (no changes committed): %w", err)
+	}
 	if err := tx.Commit(ctx); err != nil {
 		var serverError *pgconn.PgError
 		if !errors.Is(err, pgx.ErrTxCommitRollback) && !errors.As(err, &serverError) {

@@ -28,6 +28,22 @@ Staff manage this from the client page (Contacts → client name) and the projec
 
 **Signing.** The studio signs the PDF before uploading it. The client opens it, types their full legal name and ticks a consent box. Shigoto records name, email, time, IP, browser and the SHA-256 of the exact file, and stores a separate signing-certificate PDF; the uploaded file is never modified. With SMTP configured the client is emailed when a document needs signing, and owners plus the uploader when it's signed.
 
+## Quotes
+
+With the `quotes` module (it needs `timesheets`; both are on by default) staff build quotes under **Quotes**:
+
+- **Lines**: each line is **labour** (hours at an hourly rate) or **material** (quantity at a unit price), with a GST code. GST is worked out per line, as on invoices.
+- **Customer and project**: a quote is for a client contact and can be linked to one of their open projects.
+- **Attachments**: a scope of work, site photos or the customer's evidence can be attached for internal records. They never appear on the PDF or in the portal.
+- **Lifecycle**: draft → sent → accepted or declined. Only drafts can be edited. **Mark sent** saves the PDF once, so the customer's copy never changes, even if the business profile changes later. A sent quote past its valid-until date shows as **Expired**; staff can still accept or decline it. **Revise** copies a sent or declined quote into a new draft (`Q-0007-R2`); sending it supersedes the earlier revision.
+- **Accept** (needs permission to create projects): with no linked project it creates a pending, fixed-price project with no hourly rate, named after the quote. Each labour line becomes a task at its quoted rate; material lines stay on the quote. Name clashes get the quote number appended. Invoicing stays manual.
+
+A project's **Costs** tab (quotes module plus `reports_read`) compares the accepted quotes with what has been invoiced and the expenses tagged to the project, all ex GST.
+
+Clients see their sent quotes (never drafts) on the portal hub and project pages, and can download the PDF. Quotes are view-only in the portal.
+
+**Settings → Business profile** holds the address, phone, email, logo, licences (free-form type and number, for example `QBCC` / `1234567`) and default quote terms printed on quotes.
+
 ## Requirements
 
 Docker plus [go-task](https://taskfile.dev), with Go on the host. Node 24 is

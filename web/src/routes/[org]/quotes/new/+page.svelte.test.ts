@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { goto, setPage } from '../../../../lib/test/app.svelte';
+import { beforeNavigate, goto, setPage } from '../../../../lib/test/app.svelte';
 import { apiMock } from '../../../../lib/test/mock-api';
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { session } from '../../../../lib/session.svelte';
@@ -77,5 +77,23 @@ describe('new quote', () => {
 		render(Page);
 		expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'You do not have permission to create quotes.');
 		expect(apiMock).not.toHaveBeenCalled();
+	});
+
+	it('is not blocked by its own unsaved-changes guard when opening the saved quote', async () => {
+		let cancelled = false;
+		goto.mockImplementation((to: string) => {
+			const guard = beforeNavigate.mock.calls.at(-1)![0] as (n: { to: { url: URL }; cancel: () => void }) => void;
+			guard({ to: { url: new URL(`http://x${to}`) }, cancel: () => { cancelled = true; } });
+			return Promise.resolve();
+		});
+		render(Page);
+		await screen.findByLabelText('Terms');
+		await fireEvent.input(screen.getByLabelText('Title'), { target: { value: 'Job' } });
+		await fireEvent.input(screen.getByLabelText('Description'), { target: { value: 'Work' } });
+		await fireEvent.input(screen.getByLabelText('Hours'), { target: { value: '1' } });
+		await fireEvent.input(screen.getByLabelText('Rate ($/h)'), { target: { value: '95' } });
+		await fireEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+		await vi.waitFor(() => expect(goto).toHaveBeenCalledWith('/acme/quotes/42'));
+		expect(cancelled).toBe(false);
 	});
 });

@@ -66,6 +66,9 @@
 			await api('PUT', `/api/v1/orgs/${org}/quotes/${id}`, body);
 			if (token !== seq || s !== scope) return;
 			dirty = false;
+			// Not busy any more: the unsaved-changes guard blocks leaving
+			// while a save is in flight.
+			saving = false;
 			await goto(detailHref);
 		} catch (e) {
 			if (token === seq) saveError = e instanceof ApiError ? e.message : 'Could not save the quote.';
