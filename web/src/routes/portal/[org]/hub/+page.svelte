@@ -10,6 +10,8 @@
 	import StatusBadge from '../../../../lib/components/StatusBadge.svelte';
 	import EmptyState from '../../../../lib/components/EmptyState.svelte';
 	import Button from '../../../../lib/components/Button.svelte';
+	import PortalQuotes from '../../../../lib/modules/quotes/PortalQuotes.svelte';
+	import { session } from '../../../../lib/session.svelte';
 	import {
 		PROJECT_STATUS_LABELS,
 		PROJECT_STATUS_TONES,
@@ -121,6 +123,13 @@
 				{#if cancelled.length > 0 && !showCancelled}
 					<button type="button" class="btn btn-ghost btn-sm mt-2" onclick={() => (showCancelled = true)}>Show cancelled ({cancelled.length})</button>
 				{/if}
+			</section>
+		{/if}
+
+		{#if session.modules.includes('quotes')}
+			<section aria-labelledby="quotes-heading">
+				<h2 id="quotes-heading" class="mb-2 text-lg font-semibold">Quotes</h2>
+				<PortalQuotes {org} />
 			</section>
 		{/if}
 

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import { setPage } from '../../../../lib/test/app.svelte';
 import { mockApi } from '../../../../lib/test/mock-api';
+import { session } from '../../../../lib/session.svelte';
 import Page from './+page.svelte';
 
 const hub = (over = {}) => ({
@@ -45,5 +46,24 @@ describe('client hub', () => {
 		await screen.findByRole('heading', { name: 'Welcome' });
 		expect(screen.queryByText(/need your signature/)).toBeNull();
 		expect(screen.queryByRole('heading', { name: 'Projects' })).toBeNull();
+	});
+
+	it('lists quotes when the quotes module is on', async () => {
+		session.setModules(['timesheets', 'quotes']);
+		mockApi({
+			'GET /api/v1/portal/acme/hub': hub(), 'GET /api/v1/portal/acme/documents': docs,
+			'GET /api/v1/portal/acme/quotes': { quotes: [{ id: 7, number_label: 'Q-0007', title: 'Switchboard', project_id: null, project_name: '', status: 'sent', display_status: 'sent', issue_date: '2026-11-27', valid_until: '2026-12-27', total: 52800 }] }
+		});
+		render(Page);
+		expect(await screen.findByRole('heading', { name: 'Quotes' })).toBeTruthy();
+		expect(await screen.findByRole('link', { name: /Q-0007/ })).toBeTruthy();
+	});
+
+	it('has no quotes section without the quotes module', async () => {
+		session.setModules(['timesheets']);
+		mockApi({ 'GET /api/v1/portal/acme/hub': hub(), 'GET /api/v1/portal/acme/documents': docs });
+		render(Page);
+		await screen.findByRole('heading', { name: 'Projects' });
+		expect(screen.queryByRole('heading', { name: 'Quotes' })).toBeNull();
 	});
 });

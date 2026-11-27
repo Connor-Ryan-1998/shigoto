@@ -10,6 +10,8 @@
 	import StatusBadge from '../../../../../lib/components/StatusBadge.svelte';
 	import EmptyState from '../../../../../lib/components/EmptyState.svelte';
 	import Button from '../../../../../lib/components/Button.svelte';
+	import PortalQuotes from '../../../../../lib/modules/quotes/PortalQuotes.svelte';
+	import { session } from '../../../../../lib/session.svelte';
 	import {
 		PROJECT_STATUS_LABELS,
 		PROJECT_STATUS_TONES,
@@ -134,6 +136,14 @@
 					{/if}
 				</div>
 			</section>
+			{#if session.modules.includes('quotes')}
+				<section class="card bg-base-100 shadow-sm" aria-labelledby="quotes-heading">
+					<div class="card-body">
+						<h2 id="quotes-heading" class="text-lg font-semibold">Quotes</h2>
+						<PortalQuotes {org} projectId={project.id} />
+					</div>
+				</section>
+			{/if}
 			<section class="card bg-base-100 shadow-sm" aria-labelledby="invoices-heading">
 				<div class="card-body">
 					<h2 id="invoices-heading" class="text-lg font-semibold">Invoices</h2>

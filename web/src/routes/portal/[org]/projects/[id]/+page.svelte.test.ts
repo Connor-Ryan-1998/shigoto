@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { render, screen, within } from '@testing-library/svelte';
 import { setPage } from '../../../../../lib/test/app.svelte';
 import { mockApi } from '../../../../../lib/test/mock-api';
+import { session } from '../../../../../lib/session.svelte';
 import Page from './+page.svelte';
 
 const file = { id: 1, mime: 'application/pdf', size_bytes: 1, original_name: 'x.pdf' };
@@ -38,5 +39,19 @@ describe('client project page', () => {
 		expect(within(inactive).queryByRole('link', { name: /sign/i })).toBeNull();
 		expect(within(inactive).getByText('Withdrawn')).toBeTruthy();
 		expect(screen.getByRole('link', { name: /142/ }).getAttribute('href')).toBe('/portal/acme/invoices/9');
+	});
+
+	it('lists the project\'s quotes when the quotes module is on', async () => {
+		session.setModules(['timesheets', 'quotes']);
+		mockApi({
+			'GET /api/v1/portal/acme/projects/5': {
+				id: 5, name: 'Website rebuild', status: 'pending', summary: '', goals: [], stakeholders: [], start_date: null, end_date: null,
+				documents: { to_sign: [], signed: [], discovery: [], shared: [], inactive: [] }, invoices: []
+			},
+			'GET /api/v1/portal/acme/quotes?project_id=5': { quotes: [{ id: 7, number_label: 'Q-0007', title: 'Switchboard', project_id: 5, project_name: 'Website rebuild', status: 'accepted', display_status: 'accepted', issue_date: '2026-11-27', valid_until: '2026-12-27', total: 52800 }] }
+		});
+		render(Page);
+		const quotes = (await screen.findByRole('heading', { name: 'Quotes' })).closest('section')!;
+		expect((await within(quotes).findByRole('link', { name: /Q-0007/ })).getAttribute('href')).toBe('/portal/acme/quotes/7');
 	});
 });

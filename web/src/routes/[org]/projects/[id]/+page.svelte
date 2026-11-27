@@ -17,6 +17,7 @@
 	import EntriesTable from '../../../../lib/modules/timesheets/EntriesTable.svelte';
 	import HoursChart from '../../../../lib/modules/timesheets/HoursChart.svelte';
 	import ClientDocuments from '../../../../lib/modules/clients/ClientDocuments.svelte';
+	import ProjectCosts from '../../../../lib/modules/quotes/ProjectCosts.svelte';
 	import {
 		BILLING_LABELS,
 		PERIOD_LABELS,
@@ -54,9 +55,14 @@
 	let loaded = $state('');
 	let error = $state('');
 	let busy = $state(false);
-	let tab = $state<'overview' | 'timesheet'>(
-		page.url?.searchParams.get('tab') === 'timesheet' ? 'timesheet' : 'overview'
-	);
+	// The Costs tab compares quoted, invoiced and spent money: it needs the
+	// quotes module and reports_read.
+	const canSeeCosts = $derived(session.modules.includes('quotes') && (membership?.perms.includes('reports_read') ?? false));
+	type Tab = 'overview' | 'timesheet' | 'costs';
+	const initialTab = page.url?.searchParams.get('tab');
+	let tab = $state<Tab>(initialTab === 'timesheet' || initialTab === 'costs' ? initialTab : 'overview');
+	// A ?tab=costs link opened without access shows the overview instead.
+	const shownTab = $derived(tab === 'costs' && !canSeeCosts ? 'overview' : tab);
 
 	// Timesheet tab
 	let tsStatus = $state<'unbilled' | 'billed' | 'all'>('unbilled');
@@ -183,7 +189,7 @@
 		if (tab === 'timesheet') loadTimesheet();
 	}
 
-	function selectTab(t: 'overview' | 'timesheet') {
+	function selectTab(t: Tab) {
 		tab = t;
 		goto(`?tab=${t}`, { replaceState: true, shallow: true });
 	}
@@ -270,11 +276,14 @@
 	</PageHeader>
 
 	<div role="tablist" class="tabs tabs-border mb-4">
-		<button type="button" role="tab" class={['tab', tab === 'overview' && 'tab-active']} aria-selected={tab === 'overview'} onclick={() => selectTab('overview')}>Overview</button>
+		<button type="button" role="tab" class={['tab', shownTab === 'overview' && 'tab-active']} aria-selected={shownTab === 'overview'} onclick={() => selectTab('overview')}>Overview</button>
 		<button type="button" role="tab" class={['tab', tab === 'timesheet' && 'tab-active']} aria-selected={tab === 'timesheet'} onclick={() => selectTab('timesheet')}>Timesheet</button>
+		{#if canSeeCosts}
+			<button type="button" role="tab" class={['tab', tab === 'costs' && 'tab-active']} aria-selected={tab === 'costs'} onclick={() => selectTab('costs')}>Costs</button>
+		{/if}
 	</div>
 
-	{#if tab === 'overview'}
+	{#if shownTab === 'overview'}
 		<div class="grid gap-4 lg:grid-cols-[20rem_1fr]">
 			<section class="card bg-base-100 shadow-sm" aria-label="Project details">
 				<dl class="card-body gap-3">
@@ -375,7 +384,9 @@
 				</table>
 			</div>
 		</section>
-	{:else}
+	{:else if shownTab === 'costs'}
+		<ProjectCosts {org} projectId={project.id} />
+	{:else if tab === 'timesheet'}
 		<FilterBar>
 			<span class="text-sm font-semibold uppercase text-base-content/70">View by</span>
 			<label class="select select-sm w-auto">

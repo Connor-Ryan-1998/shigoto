@@ -39,6 +39,44 @@ beforeEach(() => {
 });
 
 describe('project detail', () => {
+	it('shows a Costs tab with the quotes module and reports_read', async () => {
+		session.setModules(['timesheets', 'quotes']);
+		session.setMe({ user: { id: 1, email: 'o@example.com', name: 'Owner' }, orgs: [{ slug: 'acme', name: 'Acme', role: 'owner', perms: ['timesheets_read', 'reports_read'] }] });
+		session.setOrg('acme');
+		apiMock.mockImplementation((m: string, p: string) => p.endsWith('/costs')
+			? Promise.resolve({ quoted_labour: 0, quoted_materials: 0, quoted_total: 0, invoiced: 0, expenses_total: 0, expenses: [] })
+			: route(m, p));
+		render(Page);
+		await fireEvent.click(await screen.findByRole('tab', { name: 'Costs' }));
+		expect(await screen.findByText('All amounts exclude GST.')).toBeTruthy();
+		expect(apiMock).toHaveBeenCalledWith('GET', '/api/v1/orgs/acme/projects/5/costs');
+		expect(goto).toHaveBeenCalledWith('?tab=costs', { replaceState: true, shallow: true });
+	});
+
+	it('falls back to the overview for a costs link without access', async () => {
+		setPage({ params: { org: 'acme', id: '5' }, url: new URL('http://x/acme/projects/5?tab=costs') });
+		session.setModules(['timesheets']);
+		render(Page);
+		expect((await screen.findByRole('tab', { name: 'Overview' })).getAttribute('aria-selected')).toBe('true');
+		expect(apiMock.mock.calls.some(([, p]) => String(p).endsWith('/costs'))).toBe(false);
+	});
+
+	it('has no Costs tab without the quotes module or reports_read', async () => {
+		session.setModules(['timesheets']);
+		session.setMe({ user: { id: 1, email: 'o@example.com', name: 'Owner' }, orgs: [{ slug: 'acme', name: 'Acme', role: 'owner', perms: ['timesheets_read', 'reports_read'] }] });
+		session.setOrg('acme');
+		const { unmount } = render(Page);
+		await screen.findByRole('tab', { name: 'Overview' });
+		expect(screen.queryByRole('tab', { name: 'Costs' })).toBeNull();
+		unmount();
+		session.setModules(['timesheets', 'quotes']);
+		session.setMe({ user: { id: 1, email: 'o@example.com', name: 'Owner' }, orgs: [{ slug: 'acme', name: 'Acme', role: 'staff', perms: ['timesheets_read'] }] });
+		session.setOrg('acme');
+		render(Page);
+		await screen.findByRole('tab', { name: 'Overview' });
+		expect(screen.queryByRole('tab', { name: 'Costs' })).toBeNull();
+	});
+
 	it('shows a dash for a fixed-price project with no base rate', async () => {
 		project.hourly_rate = null;
 		project.billing_method = 'fixed';
