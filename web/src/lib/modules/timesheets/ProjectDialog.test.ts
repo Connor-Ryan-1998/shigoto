@@ -53,4 +53,28 @@ describe('ProjectDialog', () => {
 		await screen.findByText('Base rate must be greater than zero.');
 		expect(apiMock).not.toHaveBeenCalled();
 	});
+
+	it('lets a fixed-price project have no rate', async () => {
+		apiMock.mockResolvedValue({ ...project, hourly_rate: null, billing_method: 'fixed' });
+		const onsaved = vi.fn();
+		render(ProjectDialog, { open: true, org: 'acme', contacts, onsaved });
+		await fireEvent.input(screen.getByLabelText('Project name'), { target: { value: 'Quoted job' } });
+		await fireEvent.change(screen.getByLabelText('Billing method'), { target: { value: 'fixed' } });
+		await fireEvent.click(screen.getByRole('button', { name: 'Create project' }));
+		await vi.waitFor(() => expect(onsaved).toHaveBeenCalled());
+		expect(apiMock.mock.calls[0][2]).toMatchObject({ hourly_rate: null, billing_method: 'fixed' });
+	});
+
+	it('shows a null rate as blank when editing', async () => {
+		render(ProjectDialog, { open: true, org: 'acme', contacts, project: { ...project, hourly_rate: null, billing_method: 'fixed' }, onsaved: vi.fn() });
+		expect((screen.getByLabelText('Base rate ($/h)') as HTMLInputElement).value).toBe('');
+	});
+
+	it('still needs a rate for time and materials', async () => {
+		render(ProjectDialog, { open: true, org: 'acme', contacts, onsaved: vi.fn() });
+		await fireEvent.input(screen.getByLabelText('Project name'), { target: { value: 'Hourly' } });
+		await fireEvent.click(screen.getByRole('button', { name: 'Create project' }));
+		await screen.findByText('Enter an hourly rate.');
+		expect(apiMock).not.toHaveBeenCalled();
+	});
 });

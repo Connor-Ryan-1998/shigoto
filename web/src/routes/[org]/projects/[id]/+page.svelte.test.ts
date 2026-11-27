@@ -39,6 +39,16 @@ beforeEach(() => {
 });
 
 describe('project detail', () => {
+	it('shows a dash for a fixed-price project with no base rate', async () => {
+		project.hourly_rate = null;
+		project.billing_method = 'fixed';
+		render(Page);
+		const label = await screen.findByText('Base rate');
+		expect(label.nextElementSibling?.textContent).toBe('—');
+		project.hourly_rate = 12000;
+		project.billing_method = 'tm';
+	});
+
 	it('shows client portal details and project documents to staff who can read contacts', async () => {
 		project.summary = 'Rebuild the site';
 		project.goals = 'Bookings live\nFast mobile';

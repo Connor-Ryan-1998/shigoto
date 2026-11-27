@@ -120,7 +120,7 @@
 							<td>{customer.get(p.client_contact_id) ?? '—'}</td>
 							<td><StatusBadge status={STATUS_LABELS[p.status]} tone={STATUS_TONES[p.status]} /></td>
 							<td>{BILLING_LABELS[p.billing_method]}</td>
-							<td class="text-right tabular-nums">{money(p.hourly_rate)}/h</td>
+							<td class="text-right tabular-nums">{p.hourly_rate != null ? `${money(p.hourly_rate)}/h` : '—'}</td>
 							<td class="whitespace-nowrap">
 								{p.start_date ? date(p.start_date) : '—'} – {p.end_date ? date(p.end_date) : '—'}
 							</td>

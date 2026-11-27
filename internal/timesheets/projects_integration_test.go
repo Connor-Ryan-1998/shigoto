@@ -274,3 +274,69 @@ func TestUpdateProjectClientLockedByDocuments(t *testing.T) {
 		t.Fatalf("client change with documents err = %v, want ErrInvalidState", err)
 	}
 }
+
+// TestFixedProjectWithoutRate covers the nullable hourly rate: a
+// fixed-price project may have none (0, stored as NULL), a time-and-
+// materials project may not.
+func TestFixedProjectWithoutRate(t *testing.T) {
+	e := testkit.New(t)
+	pool, ctx := e.Pool, e.Ctx
+	org := e.Org("acme")
+	client := e.Contact(org, testkit.Name("A Client")).ID
+
+	p, err := timesheets.CreateProject(ctx, pool, org.ID, timesheets.Project{
+		ClientContactID: client, Name: "Quoted job", GSTCode: core.GST,
+		BillingMethod: timesheets.BillingFixed,
+	})
+	if err != nil {
+		t.Fatalf("CreateProject fixed without rate: %v", err)
+	}
+	got, err := timesheets.GetProject(ctx, pool, org.ID, p.ID)
+	if err != nil || got.HourlyRate != 0 {
+		t.Fatalf("GetProject = %+v, %v; want HourlyRate 0", got, err)
+	}
+	if n := e.Count("projects", "id = $1 AND hourly_rate IS NULL", p.ID); n != 1 {
+		t.Fatalf("stored hourly_rate is not NULL")
+	}
+
+	_, err = timesheets.CreateProject(ctx, pool, org.ID, timesheets.Project{
+		ClientContactID: client, Name: "Hourly job", GSTCode: core.GST,
+	})
+	if !errors.Is(err, core.ErrInvalidInput) || err.Error() != "invalid input: hourly_rate must be positive" {
+		t.Fatalf("tm without rate err = %v, want hourly_rate must be positive", err)
+	}
+
+	got.BillingMethod = timesheets.BillingTM
+	if _, err := timesheets.UpdateProject(ctx, pool, org.ID, p.ID, got); !errors.Is(err, core.ErrInvalidInput) {
+		t.Fatalf("switch to tm without rate err = %v, want ErrInvalidInput", err)
+	}
+}
+
+// TestFixedProjectNullRateReaders checks every reader of the project rate
+// copes with a fixed-price project that has none.
+func TestFixedProjectNullRateReaders(t *testing.T) {
+	e := testkit.New(t)
+	pool, ctx := e.Pool, e.Ctx
+	org := e.Org("acme")
+	userID := e.User("reader@example.com").ID
+	client := e.Contact(org, testkit.Name("A Client")).ID
+	p := e.Project(org, client, testkit.ProjectName("Quoted job"), testkit.ProjectRate(0), testkit.FixedPrice())
+	task := e.Task(org, p.ID, testkit.TaskName("Build"))
+	day := time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC)
+	e.Entry(org, userID, timesheets.Entry{TaskID: task.ID, WorkDate: day, Minutes: 60}, day)
+
+	entries, err := timesheets.ListEntries(ctx, pool, org.ID, timesheets.EntryFilter{ProjectID: &p.ID})
+	if err != nil || len(entries) != 1 || entries[0].Rate != 0 {
+		t.Fatalf("ListEntries = %+v, %v; want one entry at rate 0", entries, err)
+	}
+	if _, err := timesheets.Module().Dashboard(ctx, pool, org.ID, day); err != nil {
+		t.Fatalf("dashboard: %v", err)
+	}
+	preview, err := timesheets.PreviewBilling(ctx, pool, org.ID, timesheets.PreviewInput{ClientContactID: client, From: day, To: day})
+	if err != nil {
+		t.Fatalf("PreviewBilling: %v", err)
+	}
+	if len(preview.Projects) != 0 {
+		t.Fatalf("preview = %+v, want nothing to bill", preview)
+	}
+}

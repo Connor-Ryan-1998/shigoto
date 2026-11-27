@@ -41,10 +41,14 @@ const projectColumns = `id, org_id, client_contact_id, name, hourly_rate, gst_co
 func scanProject(row pgx.Row) (Project, error) {
 	var p Project
 	var gstCode string
-	err := row.Scan(&p.ID, &p.OrgID, &p.ClientContactID, &p.Name, &p.HourlyRate, &gstCode,
+	var rate *int64
+	err := row.Scan(&p.ID, &p.OrgID, &p.ClientContactID, &p.Name, &rate, &gstCode,
 		&p.Status, &p.Description, &p.StartDate, &p.EndDate, &p.BillingMethod, &p.Active,
 		&p.Summary, &p.Goals, &p.Stakeholders)
 	p.GSTCode = core.GSTCode(gstCode)
+	if rate != nil {
+		p.HourlyRate = core.Cents(*rate)
+	}
 	return p, err
 }
 
@@ -57,7 +61,9 @@ func validateProject(p Project) error {
 	if p.Name == "" {
 		return fmt.Errorf("%w: name is required", core.ErrInvalidInput)
 	}
-	if p.HourlyRate <= 0 {
+	// 0 means "no rate" (stored NULL), which only a fixed-price project
+	// may have: the billing run never prices its time.
+	if p.HourlyRate < 0 || (p.HourlyRate == 0 && p.BillingMethod != BillingFixed) {
 		return fmt.Errorf("%w: hourly_rate must be positive", core.ErrInvalidInput)
 	}
 	switch p.Status {
@@ -134,7 +140,7 @@ func CreateProject(ctx context.Context, q core.Querier, orgID int64, p Project) 
 		INSERT INTO projects (org_id, client_contact_id, name, hourly_rate, gst_code,
 			status, description, start_date, end_date, billing_method,
 			summary, goals, stakeholders)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+		VALUES ($1, $2, $3, NULLIF($4::bigint, 0), $5, $6, $7, $8, $9, $10, $11, $12, $13)
 		RETURNING `+projectColumns,
 		orgID, p.ClientContactID, p.Name, int64(p.HourlyRate), string(p.GSTCode),
 		p.Status, p.Description, p.StartDate, p.EndDate, p.BillingMethod,
@@ -244,7 +250,7 @@ func UpdateProject(ctx context.Context, q core.Querier, orgID, id int64, p Proje
 	}
 
 	row := q.QueryRow(ctx, `
-		UPDATE projects SET name = $1, hourly_rate = $2, gst_code = $3, status = $4,
+		UPDATE projects SET name = $1, hourly_rate = NULLIF($2::bigint, 0), gst_code = $3, status = $4,
 			description = $5, start_date = $6, end_date = $7, billing_method = $8,
 			client_contact_id = $9, summary = $12, goals = $13, stakeholders = $14
 		WHERE org_id = $10 AND id = $11

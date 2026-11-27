@@ -193,18 +193,20 @@ func registerRoutes(mux *http.ServeMux, d module.Deps) {
 // --- request/response shapes ---
 
 type projectRequest struct {
-	Name            string          `json:"name"`
-	ClientContactID int64           `json:"client_contact_id"`
-	HourlyRate      int64           `json:"hourly_rate"`
-	GSTCode         string          `json:"gst_code,omitempty"`
-	Status          string          `json:"status,omitempty"`
-	Description     string          `json:"description,omitempty"`
-	StartDate       json.RawMessage `json:"start_date,omitempty"`
-	EndDate         json.RawMessage `json:"end_date,omitempty"`
-	BillingMethod   string          `json:"billing_method,omitempty"`
-	Summary         string          `json:"summary,omitempty"`
-	Goals           string          `json:"goals,omitempty"`
-	Stakeholders    string          `json:"stakeholders,omitempty"`
+	Name            string `json:"name"`
+	ClientContactID int64  `json:"client_contact_id"`
+	// HourlyRate is null (or omitted) for a fixed-price project with no
+	// rate.
+	HourlyRate    *int64          `json:"hourly_rate"`
+	GSTCode       string          `json:"gst_code,omitempty"`
+	Status        string          `json:"status,omitempty"`
+	Description   string          `json:"description,omitempty"`
+	StartDate     json.RawMessage `json:"start_date,omitempty"`
+	EndDate       json.RawMessage `json:"end_date,omitempty"`
+	BillingMethod string          `json:"billing_method,omitempty"`
+	Summary       string          `json:"summary,omitempty"`
+	Goals         string          `json:"goals,omitempty"`
+	Stakeholders  string          `json:"stakeholders,omitempty"`
 }
 
 // projectUpdateRequest is a full replace: every field must be present, so
@@ -213,15 +215,17 @@ type projectRequest struct {
 // json.RawMessage for the same reason as taskUpdateRequest's hourly_rate:
 // an explicit null clears a date, an omitted key is a 422.
 type projectUpdateRequest struct {
-	Name            *string         `json:"name"`
-	ClientContactID *int64          `json:"client_contact_id"`
-	HourlyRate      *int64          `json:"hourly_rate"`
-	GSTCode         *string         `json:"gst_code"`
-	Status          *string         `json:"status"`
-	Description     *string         `json:"description"`
-	StartDate       json.RawMessage `json:"start_date"`
-	EndDate         json.RawMessage `json:"end_date"`
-	BillingMethod   *string         `json:"billing_method"`
+	Name            *string `json:"name"`
+	ClientContactID *int64  `json:"client_contact_id"`
+	// HourlyRate distinguishes omitted (nil, a 422) from an explicit null
+	// (no rate, fixed-price only) from a number.
+	HourlyRate    json.RawMessage `json:"hourly_rate"`
+	GSTCode       *string         `json:"gst_code"`
+	Status        *string         `json:"status"`
+	Description   *string         `json:"description"`
+	StartDate     json.RawMessage `json:"start_date"`
+	EndDate       json.RawMessage `json:"end_date"`
+	BillingMethod *string         `json:"billing_method"`
 	// The client-facing fields are the exception to full replace: an
 	// omitted key keeps the stored value, so a client that predates them
 	// never wipes them.
@@ -234,7 +238,7 @@ type projectResponse struct {
 	ID              int64   `json:"id"`
 	ClientContactID int64   `json:"client_contact_id"`
 	Name            string  `json:"name"`
-	HourlyRate      int64   `json:"hourly_rate"`
+	HourlyRate      *int64  `json:"hourly_rate"`
 	GSTCode         string  `json:"gst_code"`
 	Status          string  `json:"status"`
 	Description     string  `json:"description"`
@@ -280,7 +284,7 @@ func parseOptionalDate(raw json.RawMessage, name string) (*time.Time, error) {
 func projectToResponse(p Project) projectResponse {
 	return projectResponse{
 		ID: p.ID, ClientContactID: p.ClientContactID, Name: p.Name,
-		HourlyRate: int64(p.HourlyRate), GSTCode: string(p.GSTCode),
+		HourlyRate: optionalRate(p.HourlyRate), GSTCode: string(p.GSTCode),
 		Status: p.Status, Description: p.Description,
 		StartDate: formatOptionalDate(p.StartDate), EndDate: formatOptionalDate(p.EndDate),
 		BillingMethod: p.BillingMethod, Active: p.Active,
@@ -351,7 +355,7 @@ func createProject(w http.ResponseWriter, r *http.Request, d module.Deps) {
 		var err error
 		created, err = CreateProject(r.Context(), tx, p.OrgID, Project{
 			ClientContactID: body.ClientContactID, Name: body.Name,
-			HourlyRate: core.Cents(body.HourlyRate), GSTCode: gstCode,
+			HourlyRate: core.Cents(derefRate(body.HourlyRate)), GSTCode: gstCode,
 			Status: body.Status, Description: body.Description,
 			StartDate: startDate, EndDate: endDate, BillingMethod: body.BillingMethod,
 			Summary: body.Summary, Goals: body.Goals, Stakeholders: body.Stakeholders,
@@ -448,6 +452,13 @@ func updateProject(w http.ResponseWriter, r *http.Request, d module.Deps) {
 		module.WriteError(w, http.StatusUnprocessableEntity, "billing_method is required")
 		return
 	}
+	var rate int64
+	if string(body.HourlyRate) != "null" {
+		if err := json.Unmarshal(body.HourlyRate, &rate); err != nil {
+			module.WriteError(w, http.StatusUnprocessableEntity, "hourly_rate must be a number or null")
+			return
+		}
+	}
 	startDate, err := parseOptionalDate(body.StartDate, "start_date")
 	if err != nil {
 		module.WriteError(w, http.StatusUnprocessableEntity, err.Error())
@@ -465,7 +476,7 @@ func updateProject(w http.ResponseWriter, r *http.Request, d module.Deps) {
 		var err error
 		next := Project{
 			Name: *body.Name, ClientContactID: *body.ClientContactID,
-			HourlyRate: core.Cents(*body.HourlyRate), GSTCode: core.GSTCode(*body.GSTCode),
+			HourlyRate: core.Cents(rate), GSTCode: core.GSTCode(*body.GSTCode),
 			Status: *body.Status, Description: *body.Description,
 			StartDate: startDate, EndDate: endDate, BillingMethod: *body.BillingMethod,
 		}
@@ -1011,4 +1022,21 @@ func runBilling(w http.ResponseWriter, r *http.Request, d module.Deps) {
 		}
 	}
 	module.WriteJSON(w, http.StatusCreated, resp)
+}
+
+// optionalRate is a project rate for JSON: nil (null) for no rate.
+func optionalRate(c core.Cents) *int64 {
+	if c == 0 {
+		return nil
+	}
+	r := int64(c)
+	return &r
+}
+
+// derefRate reads an optional request rate; null or omitted is 0 (no rate).
+func derefRate(r *int64) int64 {
+	if r == nil {
+		return 0
+	}
+	return *r
 }

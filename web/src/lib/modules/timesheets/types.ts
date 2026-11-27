@@ -8,7 +8,8 @@ export type Project = {
 	id: number;
 	client_contact_id: number;
 	name: string;
-	hourly_rate: number;
+	// null: a fixed-price project with no hourly rate.
+	hourly_rate: number | null;
 	gst_code: string;
 	status: ProjectStatus;
 	description: string;

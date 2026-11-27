@@ -216,3 +216,38 @@ cases:
       body: {client_contact_id: "{c_client}", from: "2026-11-01", to: "2026-11-30", due_in_days: 14, split: combined, tasks: [{task_id: "{tk}", minutes: 60, amount: 12000}]}
     expect: {status: 409, body: {error: "billing preview changed; refresh and review"}}
     unchanged: [invoices, invoice_lines, invoice_counters, time_entries, audit_log]
+
+  # A fixed-price project may have no hourly rate (null); time and
+  # materials may not.
+  - name: fixed-price project can be created without a rate
+    as: owner
+    isolate: true
+    request:
+      method: POST
+      path: "/api/v1/orgs/acme/projects"
+      body: {name: Quoted job, client_contact_id: "{c_client}", hourly_rate: null, billing_method: fixed}
+    expect: {status: 201, body: {name: Quoted job, hourly_rate: null, billing_method: fixed}}
+  - name: time-and-materials project needs a rate
+    as: owner
+    request:
+      method: POST
+      path: "/api/v1/orgs/acme/projects"
+      body: {name: Hourly job, client_contact_id: "{c_client}", hourly_rate: null, billing_method: tm}
+    expect: {status: 422, body: {error: "invalid input: hourly_rate must be positive"}, exact: true}
+    unchanged: [projects, audit_log]
+  - name: project update can clear the rate of a fixed-price project
+    as: owner
+    isolate: true
+    request:
+      method: PUT
+      path: "/api/v1/orgs/acme/projects/{pr}"
+      body: {name: Website rebuild, client_contact_id: "{c_client}", hourly_rate: null, gst_code: GST, status: in_progress, description: "", start_date: null, end_date: null, billing_method: fixed}
+    expect: {status: 200, body: {hourly_rate: null, billing_method: fixed}}
+  - name: project update cannot clear the rate of a time-and-materials project
+    as: owner
+    request:
+      method: PUT
+      path: "/api/v1/orgs/acme/projects/{pr}"
+      body: {name: Website rebuild, client_contact_id: "{c_client}", hourly_rate: null, gst_code: GST, status: in_progress, description: "", start_date: null, end_date: null, billing_method: tm}
+    expect: {status: 422, body: {error: "invalid input: hourly_rate must be positive"}, exact: true}
+    unchanged: [projects, audit_log]

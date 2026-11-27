@@ -280,7 +280,7 @@
 				<dl class="card-body gap-3">
 					<div><dt class="text-sm text-base-content/70">Customer</dt><dd class="text-lg font-semibold text-primary">{customer ?? '—'}</dd></div>
 					<div><dt class="text-sm text-base-content/70">Billing method</dt><dd>{BILLING_LABELS[project.billing_method]}</dd></div>
-					<div><dt class="text-sm text-base-content/70">Base rate</dt><dd class="tabular-nums">{money(project.hourly_rate)}/h</dd></div>
+					<div><dt class="text-sm text-base-content/70">Base rate</dt><dd class="tabular-nums">{project.hourly_rate != null ? `${money(project.hourly_rate)}/h` : '—'}</dd></div>
 					<div><dt class="text-sm text-base-content/70">Dates</dt><dd>{project.start_date ? date(project.start_date) : '—'} – {project.end_date ? date(project.end_date) : '—'}</dd></div>
 					{#if project.description}
 						<div><dt class="text-sm text-base-content/70">Description</dt><dd class="whitespace-pre-wrap">{project.description}</dd></div>

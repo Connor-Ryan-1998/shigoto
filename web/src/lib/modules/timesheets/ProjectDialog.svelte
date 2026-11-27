@@ -62,7 +62,7 @@
 		client = String(project?.client_contact_id ?? clients[0]?.id ?? '');
 		status = project?.status ?? 'in_progress';
 		billing = project?.billing_method ?? 'tm';
-		rate = project ? (project.hourly_rate / 100).toFixed(2) : '';
+		rate = project?.hourly_rate != null ? (project.hourly_rate / 100).toFixed(2) : '';
 		gst = project?.gst_code ?? 'GST';
 		start = project?.start_date ?? '';
 		end = project?.end_date ?? '';
@@ -77,10 +77,20 @@
 		if (busy || !open || !allowed) return;
 		const slug = org;
 		const seq = actionSeq;
-		const cents = parseCents(rate);
-		if (cents === null || cents <= 0) {
-			error = 'Base rate must be greater than zero.';
-			return;
+		// A fixed-price project may have no rate (null); time and materials
+		// needs one, because billing runs price its time with it.
+		let cents: number | null = null;
+		if (rate.trim() === '') {
+			if (billing !== 'fixed') {
+				error = 'Enter an hourly rate.';
+				return;
+			}
+		} else {
+			cents = parseCents(rate);
+			if (cents === null || cents <= 0) {
+				error = 'Base rate must be greater than zero.';
+				return;
+			}
 		}
 		if (start && end && end < start) {
 			error = 'End date must not be before start date.';
@@ -147,7 +157,7 @@
 					</select>
 				</Field>
 				<Field label="Base rate ($/h)" id="project-rate">
-					<input class="input w-full" id="project-rate" inputmode="decimal" bind:value={rate} disabled={busy} required />
+					<input class="input w-full" id="project-rate" inputmode="decimal" bind:value={rate} disabled={busy} placeholder={billing === 'fixed' ? 'None' : undefined} />
 				</Field>
 				<Field label="GST" id="project-gst">
 					<select class="select w-full" id="project-gst" bind:value={gst} disabled={busy}>

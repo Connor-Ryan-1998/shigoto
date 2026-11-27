@@ -210,7 +210,7 @@ type EntryDetail struct {
 // details, ordered by work_date then id.
 func ListEntries(ctx context.Context, q core.Querier, orgID int64, filter EntryFilter) ([]EntryDetail, error) {
 	sql := `SELECT e.id, e.org_id, e.task_id, e.user_id, e.work_date, e.minutes, e.note, e.invoice_line_id,
-		t.name, p.id, p.name, p.billing_method, c.id, c.name, u.name, COALESCE(t.hourly_rate, p.hourly_rate)
+		t.name, p.id, p.name, p.billing_method, c.id, c.name, u.name, COALESCE(t.hourly_rate, p.hourly_rate, 0)
 		FROM time_entries e
 		JOIN project_tasks t ON t.id = e.task_id
 		JOIN projects p ON p.id = t.project_id
