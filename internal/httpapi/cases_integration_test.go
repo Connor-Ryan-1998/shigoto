@@ -275,7 +275,6 @@ func seedCaseWorld(t *testing.T, s casefile.Seed) *caseWorld {
 			}
 		}
 	}
-	store := storage.NewDisk(t.TempDir())
 	seedClientPortal(t, e, s, orgs, ids, users, store)
 	for _, name := range sortedKeys(s.Invites) {
 		inv := s.Invites[name]
