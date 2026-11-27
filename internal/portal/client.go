@@ -44,6 +44,9 @@ func registerClientRoutes(mux *http.ServeMux, d module.Deps) {
 		serveClientDocument(w, r, d, p, true)
 	})
 	handle("POST /api/v1/portal/{org}/documents/{id}/sign", signClientDocument)
+	if d.Cfg.Modules["quotes"] {
+		registerQuoteRoutes(handle)
+	}
 }
 
 type portalDocumentResponse struct {

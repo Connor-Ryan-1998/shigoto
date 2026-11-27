@@ -1,0 +1,104 @@
+# Client portal quotes: a client sees only their own contact's quotes that
+# have been sent (sent, accepted, declined, superseded; expired is derived
+# from sent), never drafts and never attachments. Anyone else - another
+# client, a tenant, a client of another org - gets a bare 404.
+seed:
+  orgs: [acme, beta]
+  users:
+    owner: {org: acme, role: owner}
+    client1: {org: acme, role: client, contact: c1}
+    client2: {org: acme, role: client, contact: c2}
+    tenant: {org: acme, role: tenant, contact: c_tenant}
+    beta_client: {org: beta, role: client, contact: c_beta}
+  contacts:
+    c1: {org: acme, kind: client, name: Client One}
+    c2: {org: acme, kind: client, name: Client Two}
+    c_tenant: {org: acme, kind: tenant, name: Tina}
+    c_beta: {org: beta, kind: client, name: Beta}
+  projects:
+    p1: {org: acme, client: c1, name: Kitchen}
+  quotes:
+    q1_draft: {org: acme, contact: c1, title: Draft}
+    q2_sent: {org: acme, contact: c1, project: p1, title: Sent, status: sent, valid_until: "2999-01-01"}
+    q3_expired: {org: acme, contact: c1, title: Expired, status: sent, valid_until: "2020-01-31"}
+    q4_accepted: {org: acme, contact: c1, title: Accepted, status: accepted}
+    q5_declined: {org: acme, contact: c1, title: Declined, status: declined}
+    q6_superseded: {org: acme, contact: c1, title: Superseded, status: superseded}
+    q7_other: {org: acme, contact: c2, title: Not yours, status: sent}
+    q_beta: {org: beta, contact: c_beta, status: sent}
+
+cases:
+  - name: client lists their sent quotes, newest first, without drafts
+    as: client1
+    request: {method: GET, path: "/api/v1/portal/acme/quotes"}
+    expect:
+      status: 200
+      body:
+        quotes:
+          - {title: Superseded, display_status: superseded}
+          - {title: Declined, display_status: declined}
+          - {title: Accepted, display_status: accepted}
+          - {title: Expired, display_status: expired}
+          - {title: Sent, display_status: sent, project_name: Kitchen, number_label: Q-0002}
+
+  - name: client filters quotes by project
+    as: client1
+    request: {method: GET, path: "/api/v1/portal/acme/quotes?project_id={p1}"}
+    expect: {status: 200, body: {quotes: [{title: Sent}]}}
+
+  - name: client opens a quote with lines and terms but no attachments
+    as: client1
+    request: {method: GET, path: "/api/v1/portal/acme/quotes/{q2_sent}"}
+    expect:
+      status: 200
+      exact: true
+      body:
+        id: "{q2_sent}"
+        number_label: Q-0002
+        title: Sent
+        project_id: "{p1}"
+        project_name: Kitchen
+        status: sent
+        display_status: sent
+        issue_date: "2998-12-02"
+        valid_until: "2999-01-01"
+        subtotal: 10000
+        gst_total: 0
+        total: 10000
+        terms: ""
+        lines: [{kind: labour, description: Work, quantity_milli: 1000, unit_amount: 10000, gst_code: FRE, amount: 10000}]
+
+  - name: a draft is not found
+    as: client1
+    request: {method: GET, path: "/api/v1/portal/acme/quotes/{q1_draft}"}
+    expect: {status: 404, body: {error: not found}, exact: true}
+
+  - name: a draft PDF is not found
+    as: client1
+    request: {method: GET, path: "/api/v1/portal/acme/quotes/{q1_draft}/pdf"}
+    expect: {status: 404, body: {error: not found}, exact: true}
+
+  - name: another client's quote is not found
+    as: client1
+    request: {method: GET, path: "/api/v1/portal/acme/quotes/{q7_other}"}
+    expect: {status: 404, body: {error: not found}, exact: true}
+
+  - name: another client's quote PDF is not found
+    as: client1
+    request: {method: GET, path: "/api/v1/portal/acme/quotes/{q7_other}/pdf"}
+    expect: {status: 404, body: {error: not found}, exact: true}
+
+  - name: another org's quote is not found
+    as: client1
+    request: {method: GET, path: "/api/v1/portal/acme/quotes/{q_beta}"}
+    expect: {status: 404, body: {error: not found}, exact: true}
+
+  - name: a tenant has no quotes
+    as: tenant
+    request: {method: GET, path: "/api/v1/portal/acme/quotes"}
+    expect: {status: 404, body: {error: not found}, exact: true}
+
+  - name: the other client sees only their own quote
+    as: client2
+    request: {method: GET, path: "/api/v1/portal/acme/quotes"}
+    expect: {status: 200, body: {quotes: [{title: Not yours}]}}

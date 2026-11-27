@@ -100,3 +100,25 @@ func TestQuotePDFRoute(t *testing.T) {
 		t.Fatalf("pdf: %d %v", rr.Code, rr.Header)
 	}
 }
+
+func TestPortalQuotePDF(t *testing.T) {
+	e := testkit.New(t)
+	store := storage.NewDisk(t.TempDir())
+	handler := e.Handler(testkit.Store(store))
+	org := e.Org("acme")
+	contact := e.Contact(org).ID
+	client := e.Login(e.PortalUser("client@example.com", org, "client", contact), handler)
+	q, err := quotes.CreateDraft(e.Ctx, e.Pool, org.ID, draft(contact,
+		quotes.NewLine{Kind: quotes.KindMaterial, Description: "x", QuantityMilli: 1000, UnitAmount: 100, GSTCode: "FRE"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := markSent(t, e, store, org.ID, q.ID); err != nil {
+		t.Fatal(err)
+	}
+	rr := client.Do(http.MethodGet, fmt.Sprintf("/api/v1/portal/acme/quotes/%d/pdf", q.ID), nil)
+	if rr.Code != http.StatusOK || rr.Header.Get("Content-Type") != "application/pdf" || !strings.HasPrefix(string(rr.Body), "%PDF") ||
+		rr.Header.Get("Content-Disposition") != `inline; filename=Q-0001.pdf` {
+		t.Fatalf("portal pdf: %d %v", rr.Code, rr.Header)
+	}
+}

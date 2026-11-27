@@ -2,7 +2,7 @@
 # project route doesn't exist; welcome, checklist and documents still work.
 seed:
   orgs: [acme]
-  modules: {timesheets: false}
+  modules: {timesheets: false, quotes: false}
   users:
     owner: {org: acme, role: owner}
     client1: {org: acme, role: client, contact: c1}
@@ -25,3 +25,8 @@ cases:
     as: client1
     request: {method: GET, path: "/api/v1/portal/acme/projects/{p1}"}
     expect: {status: 404}
+
+  - name: quotes are gone without the quotes module
+    as: client1
+    request: {method: GET, path: /api/v1/portal/acme/quotes}
+    expect: {status: 404, body: {error: not found}, exact: true}
