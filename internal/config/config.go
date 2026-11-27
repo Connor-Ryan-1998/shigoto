@@ -12,7 +12,7 @@ import (
 )
 
 // Known lists the module names that SHIGOTO_MODULES may select.
-var Known = []string{"property", "timesheets", "reconciliation"}
+var Known = []string{"property", "timesheets", "reconciliation", "quotes"}
 
 // StripeOrg holds the Stripe credentials for one organization.
 type StripeOrg struct {
@@ -215,6 +215,10 @@ func Load(getenv func(string) string) (Config, error) {
 			return Config{}, fmt.Errorf("unknown module %q (known: %s)", name, strings.Join(Known, ", "))
 		}
 		c.Modules[name] = true
+	}
+	// Accepting a quote creates a timesheets project, so quotes needs it.
+	if c.Modules["quotes"] && !c.Modules["timesheets"] {
+		return Config{}, fmt.Errorf("module quotes requires timesheets")
 	}
 
 	scheduler := getenv("SHIGOTO_SCHEDULER")

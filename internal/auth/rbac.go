@@ -38,6 +38,12 @@ const (
 	// PermImport covers bulk CSV import of invoices and time entries;
 	// owner only.
 	PermImport Perm = "import"
+	// PermQuotesRead lets a user read quotes and their attachments.
+	PermQuotesRead Perm = "quotes_read"
+	// PermQuotesWrite lets a user create, edit, send, decline and revise
+	// quotes. Accepting one also needs PermTimesheetsAdmin, because it
+	// creates a project.
+	PermQuotesWrite Perm = "quotes_write"
 )
 
 // rolePerms is the single source of truth for Can. Owner holds every
@@ -57,6 +63,8 @@ var rolePerms = map[Role]map[Perm]bool{
 		PermTimesheetsRead:  true,
 		PermTimesheetsAdmin: true,
 		PermImport:          true,
+		PermQuotesRead:      true,
+		PermQuotesWrite:     true,
 	},
 	Staff: {
 		PermContactsWrite:   true,
@@ -69,6 +77,8 @@ var rolePerms = map[Role]map[Perm]bool{
 		PermPropertyRead:    true,
 		PermTimesheetsWrite: true,
 		PermTimesheetsRead:  true,
+		PermQuotesRead:      true,
+		PermQuotesWrite:     true,
 	},
 	Bookkeeper: {
 		PermInvoicesRead:   true,
@@ -77,6 +87,7 @@ var rolePerms = map[Role]map[Perm]bool{
 		PermPaymentsWrite:  true,
 		PermPropertyRead:   true,
 		PermTimesheetsRead: true,
+		PermQuotesRead:     true,
 	},
 	Tenant: {},
 	Client: {},

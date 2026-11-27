@@ -7,7 +7,7 @@
 - name: defaults
   want:
     listen: ":8080"
-    modules: [property, timesheets, reconciliation]
+    modules: [property, timesheets, reconciliation, quotes]
     timezone: Australia/Brisbane
     scheduler: true
     smtp_host: ""
@@ -18,6 +18,15 @@
     storage: disk
     llm_configured: false
     embed_configured: false
+
+- name: quotes needs timesheets
+  env: {SHIGOTO_MODULES: "quotes"}
+  err: module quotes requires timesheets
+
+- name: quotes with timesheets
+  env: {SHIGOTO_MODULES: "timesheets,quotes"}
+  want:
+    modules: [timesheets, quotes]
 
 - name: unknown module rejected
   env: {SHIGOTO_MODULES: "property,payroll"}
