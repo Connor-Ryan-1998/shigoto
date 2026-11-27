@@ -23,6 +23,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"go.yaml.in/yaml/v3"
 
@@ -65,6 +66,8 @@ type Seed struct {
 	Welcome   map[string]string            `yaml:"welcome"`
 	Checklist map[string]SeedChecklistItem `yaml:"checklist"`
 	Documents map[string]SeedDocument      `yaml:"documents"`
+	// Quotes are seeded after projects and client documents.
+	Quotes map[string]SeedQuote `yaml:"quotes"`
 	// Assistant, when set, configures the strata assistant against a
 	// scripted model that answers every request with Reply.
 	Assistant *SeedAssistant `yaml:"assistant"`
@@ -96,6 +99,20 @@ type SeedDocument struct {
 	Category string `yaml:"category"`
 	Status   string `yaml:"status"`
 	Signer   string `yaml:"signer"`
+}
+
+// SeedQuote is a quote for client Contact, optionally on Project (which
+// must be Contact's). It has one GST-free labour line, 1 hour at 10000
+// cents. Status (default draft) is reached by sending it (storing its PDF)
+// and then setting the status; ValidUntil (YYYY-MM-DD) defaults to 30 days
+// from today, and the quote is issued 30 days before it.
+type SeedQuote struct {
+	Org        string `yaml:"org"`
+	Contact    string `yaml:"contact"`
+	Project    string `yaml:"project"`
+	Title      string `yaml:"title"`
+	Status     string `yaml:"status"`
+	ValidUntil string `yaml:"valid_until"`
 }
 
 // SeedUser is a member of Org with Role. Contact (a seed contact name in
@@ -357,6 +374,7 @@ func (s Seed) seedNames() map[string]string {
 	add("invites", sortedKeys(s.Invites))
 	add("checklist", sortedKeys(s.Checklist))
 	add("documents", sortedKeys(s.Documents))
+	add("quotes", sortedKeys(s.Quotes))
 	return names
 }
 
@@ -411,6 +429,7 @@ func (f File) Validate() error {
 		{"invites", sortedKeys(s.Invites)},
 		{"checklist", sortedKeys(s.Checklist)},
 		{"documents", sortedKeys(s.Documents)},
+		{"quotes", sortedKeys(s.Quotes)},
 	} {
 		for _, k := range group.keys {
 			if prev, dup := seen[k]; dup {
@@ -490,6 +509,29 @@ func (f File) Validate() error {
 		checkContact(where, "contact", it.Contact, it.Org)
 		if strings.TrimSpace(it.Action) == "" {
 			seedErr("%s: action is required", where)
+		}
+	}
+	for _, name := range sortedKeys(s.Quotes) {
+		q := s.Quotes[name]
+		where := "quotes." + name
+		checkOrg(where, q.Org)
+		checkContact(where, "contact", q.Contact, q.Org)
+		if q.Project != "" {
+			if p, ok := s.Projects[q.Project]; !ok {
+				seedErr("%s: project: unknown project %q", where, q.Project)
+			} else if p.Client != q.Contact {
+				seedErr("%s: project: project %q is not contact %q's", where, q.Project, q.Contact)
+			}
+		}
+		switch q.Status {
+		case "", "draft", "sent", "accepted", "declined", "superseded":
+		default:
+			seedErr("%s: unknown status %q", where, q.Status)
+		}
+		if q.ValidUntil != "" {
+			if _, err := time.Parse(time.DateOnly, q.ValidUntil); err != nil {
+				seedErr("%s: valid_until %q is not YYYY-MM-DD", where, q.ValidUntil)
+			}
 		}
 	}
 	for _, name := range sortedKeys(s.Documents) {

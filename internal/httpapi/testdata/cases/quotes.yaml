@@ -1,0 +1,140 @@
+# Quotes staff API: permissions (accept also needs timesheets_admin), org
+# isolation, draft-only edits, validation, module gating, derived expiry
+# and the project costs endpoint.
+seed:
+  orgs: [acme, foreign]
+  users:
+    owner: {org: acme, role: owner}
+    staff: {org: acme, role: staff}
+    keeper: {org: acme, role: bookkeeper}
+    client: {org: acme, role: client, contact: c_client}
+  contacts:
+    c_client: {org: acme, kind: client, name: Priya}
+    c_tenant: {org: acme, kind: tenant, name: Tina}
+    c_foreign: {org: foreign, kind: client, name: Far}
+  projects:
+    pr: {org: acme, client: c_client}
+  quotes:
+    q_draft: {org: acme, contact: c_client, title: Draft job}
+    q_sent: {org: acme, contact: c_client, status: sent, title: Sent job, valid_until: "2999-01-01"}
+    q_expired: {org: acme, contact: c_client, status: sent, title: Old job, valid_until: "2020-01-31"}
+    q_foreign: {org: foreign, contact: c_foreign}
+
+cases:
+  - name: bookkeeper cannot create a quote
+    as: keeper
+    request:
+      method: POST
+      path: "/api/v1/orgs/acme/quotes"
+      body: {contact_id: "{c_client}", title: Job, lines: [{kind: labour, description: Work, quantity_milli: 1000, unit_amount: 100, gst_code: FRE}]}
+    expect: {status: 403, body: {error: forbidden}, exact: true}
+    unchanged: [quotes]
+
+  - name: bookkeeper can list quotes
+    as: keeper
+    request: {method: GET, path: "/api/v1/orgs/acme/quotes"}
+    expect: {status: 200, body: {total: 3}}
+
+  - name: client role cannot use the staff quotes API
+    as: client
+    request: {method: GET, path: "/api/v1/orgs/acme/quotes"}
+    expect: {status: 403, body: {error: forbidden}, exact: true}
+
+  - name: staff cannot accept a quote
+    as: staff
+    request: {method: POST, path: "/api/v1/orgs/acme/quotes/{q_sent}/accept"}
+    expect: {status: 403, body: {error: "accepting a quote needs permission to create projects"}, exact: true}
+    unchanged: [quotes, projects, project_tasks]
+
+  - name: owner cannot read a foreign org's quote
+    as: owner
+    request: {method: GET, path: "/api/v1/orgs/acme/quotes/{q_foreign}"}
+    expect: {status: 404, body: {error: not found}, exact: true}
+
+  - name: owner cannot download a foreign org's quote PDF
+    as: owner
+    request: {method: GET, path: "/api/v1/orgs/acme/quotes/{q_foreign}/pdf"}
+    expect: {status: 404, body: {error: not found}, exact: true}
+
+  - name: a sent quote cannot be edited
+    as: owner
+    request:
+      method: PUT
+      path: "/api/v1/orgs/acme/quotes/{q_sent}"
+      body: {contact_id: "{c_client}", title: Changed, issue_date: "2026-11-27", valid_until: "2026-12-27", lines: [{kind: labour, description: Work, quantity_milli: 1000, unit_amount: 100, gst_code: FRE}]}
+    expect: {status: 409, body: {error: "quote is not a draft"}, exact: true}
+    unchanged: [quotes, quote_lines]
+
+  - name: a line kind must be labour or material
+    as: owner
+    request:
+      method: POST
+      path: "/api/v1/orgs/acme/quotes"
+      body: {contact_id: "{c_client}", title: Job, lines: [{kind: other, description: Work, quantity_milli: 1000, unit_amount: 100, gst_code: FRE}]}
+    expect: {status: 422, body: {error: "invalid input: line 0: kind must be labour or material"}, exact: true}
+    unchanged: [quotes, quote_counters]
+
+  - name: a tenant cannot be quoted
+    as: owner
+    request:
+      method: POST
+      path: "/api/v1/orgs/acme/quotes"
+      body: {contact_id: "{c_tenant}", title: Job, lines: [{kind: labour, description: Work, quantity_milli: 1000, unit_amount: 100, gst_code: FRE}]}
+    expect: {status: 422, body: {error: "invalid input: contact_id is not a client"}, exact: true}
+    unchanged: [quotes]
+
+  - name: create defaults dates and terms
+    as: owner
+    isolate: true
+    request:
+      method: POST
+      path: "/api/v1/orgs/acme/quotes"
+      body: {contact_id: "{c_client}", project_id: "{pr}", title: Job, lines: [{kind: labour, description: Work, quantity_milli: 1500, unit_amount: 10000, gst_code: FRE}]}
+    expect:
+      status: 201
+      body: {title: Job, status: draft, display_status: draft, number_label: Q-0004, subtotal: 15000, total: 15000, attachments: []}
+
+  - name: an expired quote shows as expired
+    as: owner
+    request: {method: GET, path: "/api/v1/orgs/acme/quotes/{q_expired}"}
+    expect: {status: 200, body: {status: sent, display_status: expired}}
+
+  - name: owner accepts a sent quote into a new fixed-price project
+    as: owner
+    isolate: true
+    request: {method: POST, path: "/api/v1/orgs/acme/quotes/{q_sent}/accept"}
+    expect: {status: 200, body: {quote: {status: accepted}, project: {name: Sent job, billing_method: fixed, hourly_rate: null, status: pending}}}
+
+  - name: owner can decline an expired quote
+    as: owner
+    isolate: true
+    request: {method: POST, path: "/api/v1/orgs/acme/quotes/{q_expired}/decline"}
+    expect: {status: 200, body: {status: declined}}
+
+  - name: staff can revise a sent quote
+    as: staff
+    isolate: true
+    request: {method: POST, path: "/api/v1/orgs/acme/quotes/{q_sent}/revise"}
+    expect: {status: 201, body: {status: draft, number_label: Q-0003-R2}}
+
+  - name: staff can send a draft
+    as: staff
+    isolate: true
+    request: {method: POST, path: "/api/v1/orgs/acme/quotes/{q_draft}/send"}
+    expect: {status: 200, body: {status: sent}}
+
+  - name: a sent quote cannot be deleted
+    as: owner
+    request: {method: DELETE, path: "/api/v1/orgs/acme/quotes/{q_sent}"}
+    expect: {status: 409, body: {error: "quote is not a draft"}, exact: true}
+    unchanged: [quotes]
+
+  - name: bookkeeper can read project costs
+    as: keeper
+    request: {method: GET, path: "/api/v1/orgs/acme/projects/{pr}/costs"}
+    expect: {status: 200, body: {quoted_total: 0, invoiced: 0, expenses_total: 0, expenses: []}}
+
+  - name: client role cannot read project costs
+    as: client
+    request: {method: GET, path: "/api/v1/orgs/acme/projects/{pr}/costs"}
+    expect: {status: 403, body: {error: forbidden}, exact: true}

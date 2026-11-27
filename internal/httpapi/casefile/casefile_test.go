@@ -234,6 +234,20 @@ func TestValidateRejectsBadSeedAndCases(t *testing.T) {
 		{"bad project status", func(f *File) {
 			f.Seed.Projects = map[string]SeedProject{"pr": {Org: "other", Client: "c_foreign", Status: "paused"}}
 		}, []string{"projects.pr", "paused"}},
+		{"quote contact in another org", func(f *File) {
+			f.Seed.Quotes = map[string]SeedQuote{"q": {Org: "acme", Contact: "c_foreign"}}
+		}, []string{"quotes.q", "c_foreign"}},
+		{"bad quote status", func(f *File) {
+			f.Seed.Quotes = map[string]SeedQuote{"q": {Org: "other", Contact: "c_foreign", Status: "expired"}}
+		}, []string{"quotes.q", "expired"}},
+		{"bad quote valid_until", func(f *File) {
+			f.Seed.Quotes = map[string]SeedQuote{"q": {Org: "other", Contact: "c_foreign", ValidUntil: "soon"}}
+		}, []string{"quotes.q", "soon"}},
+		{"quote project of another contact", func(f *File) {
+			f.Seed.Contacts["c_other"] = SeedContact{Org: "other", Kind: "client"}
+			f.Seed.Projects = map[string]SeedProject{"pr": {Org: "other", Client: "c_foreign"}}
+			f.Seed.Quotes = map[string]SeedQuote{"q": {Org: "other", Contact: "c_other", Project: "pr"}}
+		}, []string{"quotes.q", "pr"}},
 		{"signed document without signer", func(f *File) {
 			f.Seed.Documents = map[string]SeedDocument{"d": {Org: "other", Contact: "c_foreign", Kind: "signature", Status: "signed"}}
 		}, []string{"documents.d", "signer"}},

@@ -1040,3 +1040,7 @@ func derefRate(r *int64) int64 {
 	}
 	return *r
 }
+
+// ProjectJSON is p as the projects API returns it, for other modules'
+// responses (e.g. accepting a quote).
+func ProjectJSON(p Project) any { return projectToResponse(p) }

@@ -19,6 +19,7 @@ import (
 	"shigoto/internal/llm"
 	"shigoto/internal/llm/llmtest"
 	"shigoto/internal/property"
+	"shigoto/internal/quotes"
 	"shigoto/internal/storage"
 	"shigoto/internal/testkit"
 )
@@ -276,6 +277,7 @@ func seedCaseWorld(t *testing.T, s casefile.Seed) *caseWorld {
 		}
 	}
 	seedClientPortal(t, e, s, orgs, ids, users, store)
+	seedQuotes(t, e, s, orgs, ids, store)
 	for _, name := range sortedKeys(s.Invites) {
 		inv := s.Invites[name]
 		var opts []testkit.InviteOption
@@ -456,4 +458,53 @@ func sortedKeys[V any](m map[string]V) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+// seedQuotes creates the seed quotes: a draft with one GST-free labour
+// line, sent (so its PDF is stored) for any later status, then forced to
+// that status.
+func seedQuotes(t *testing.T, e *testkit.Env, s casefile.Seed, orgs map[string]core.Org, ids map[string]int64, store storage.Store) {
+	t.Helper()
+	ctx, pool := e.Ctx, e.Pool
+	for _, name := range sortedKeys(s.Quotes) {
+		sq := s.Quotes[name]
+		org := orgs[sq.Org]
+		until := time.Now().UTC().Truncate(24*time.Hour).AddDate(0, 0, 30)
+		if sq.ValidUntil != "" {
+			until = testkit.Date(sq.ValidUntil)
+		}
+		d := quotes.Draft{
+			ContactID: ids[sq.Contact], Title: sq.Title, IssueDate: until.AddDate(0, 0, -30), ValidUntil: until,
+			Lines: []quotes.NewLine{{Kind: quotes.KindLabour, Description: "Work", QuantityMilli: 1000, UnitAmount: 10000, GSTCode: "FRE"}},
+		}
+		if d.Title == "" {
+			d.Title = name
+		}
+		if sq.Project != "" {
+			pid := ids[sq.Project]
+			d.ProjectID = &pid
+		}
+		q, err := quotes.CreateDraft(ctx, pool, org.ID, d)
+		if err != nil {
+			t.Fatalf("quotes.%s: %v", name, err)
+		}
+		ids[name] = q.ID
+		if sq.Status == "" || sq.Status == quotes.StatusDraft {
+			continue
+		}
+		tx, err := pool.Begin(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := quotes.MarkSent(ctx, tx, store, org.ID, q.ID, time.Now()); err != nil {
+			_ = tx.Rollback(ctx)
+			t.Fatalf("quotes.%s: send: %v", name, err)
+		}
+		if err := tx.Commit(ctx); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := pool.Exec(ctx, `UPDATE quotes SET status = $1 WHERE id = $2`, sq.Status, q.ID); err != nil {
+			t.Fatalf("quotes.%s: status: %v", name, err)
+		}
+	}
 }

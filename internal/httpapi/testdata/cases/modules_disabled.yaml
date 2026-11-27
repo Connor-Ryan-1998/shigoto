@@ -2,7 +2,7 @@
 # gets the same 404 as for any unknown route.
 seed:
   orgs: [acme]
-  modules: {property: false, timesheets: false, reconciliation: false}
+  modules: {property: false, timesheets: false, reconciliation: false, quotes: false}
   users:
     owner: {org: acme, role: owner}
     tenant: {org: acme, role: tenant, contact: c_tenant}
@@ -57,4 +57,8 @@ cases:
   - name: portal repairs are gone when property is disabled
     as: tenant
     request: {method: GET, path: /api/v1/portal/acme/maintenance}
+    expect: {status: 404, body: {error: not found}, exact: true}
+  - name: quotes are gone when the quotes module is disabled
+    as: owner
+    request: {method: GET, path: /api/v1/orgs/acme/quotes}
     expect: {status: 404, body: {error: not found}, exact: true}
