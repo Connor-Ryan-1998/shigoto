@@ -170,6 +170,7 @@ func New(d Deps) http.Handler {
 		})))
 
 	md := module.Deps{Pool: d.Pool, Auth: d.Auth, Cfg: d.Cfg, Billing: d.Billing, Store: d.Store, Mailer: d.Mailer, LLM: d.LLM, StrataKick: d.StrataKick}
+	registerLogoRoutes(mux, md)
 	portal.RegisterRoutes(mux, md)
 	// Client portal management is core: always on.
 	clients.RegisterRoutes(mux, md)

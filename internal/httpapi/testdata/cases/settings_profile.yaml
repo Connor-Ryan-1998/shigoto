@@ -1,0 +1,38 @@
+# Business profile: licence limits, logo access and org isolation.
+seed:
+  orgs: [acme, foreign]
+  users:
+    owner: {org: acme, role: owner}
+    staff: {org: acme, role: staff}
+
+cases:
+  - name: at most five licences
+    as: owner
+    request:
+      method: PUT
+      path: "/api/v1/orgs/acme/settings"
+      body:
+        name: Acme
+        invoice_lead_days: 7
+        licences:
+          - {type: A, number: "1"}
+          - {type: B, number: "2"}
+          - {type: C, number: "3"}
+          - {type: D, number: "4"}
+          - {type: E, number: "5"}
+          - {type: F, number: "6"}
+    expect: {status: 422, body: {error: "invalid input: licences: at most 5"}, exact: true}
+    unchanged: [orgs, audit_log]
+  - name: a foreign org's logo is not found
+    as: owner
+    request: {method: GET, path: "/api/v1/orgs/foreign/settings/logo"}
+    expect: {status: 404, body: {error: not found}, exact: true}
+  - name: staff cannot remove the logo
+    as: staff
+    request: {method: DELETE, path: "/api/v1/orgs/acme/settings/logo"}
+    expect: {status: 403, body: {error: forbidden}, exact: true}
+    unchanged: [orgs, files]
+  - name: no logo yet
+    as: staff
+    request: {method: GET, path: "/api/v1/orgs/acme/settings/logo"}
+    expect: {status: 404, body: {error: not found}, exact: true}

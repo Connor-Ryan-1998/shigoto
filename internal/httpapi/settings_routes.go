@@ -37,6 +37,15 @@ type settingsRequest struct {
 	InvoiceLeadDays int    `json:"invoice_lead_days"`
 	AutoSendRent    bool   `json:"auto_send_rent"`
 	EmergencyPhone  string `json:"emergency_phone"`
+	// Business profile.
+	Address    string         `json:"address"`
+	Phone      string         `json:"phone"`
+	Email      string         `json:"email"`
+	QuoteTerms string         `json:"quote_terms"`
+	Licences   []core.Licence `json:"licences"`
+	// HasLogo is response-only; a PUT ignores it (the logo has its own
+	// routes).
+	HasLogo bool `json:"has_logo"`
 }
 
 func settingsToResponse(s core.OrgSettings) settingsRequest {
@@ -44,6 +53,8 @@ func settingsToResponse(s core.OrgSettings) settingsRequest {
 		Name: s.Name, ABN: s.ABN, GSTRegistered: s.GSTRegistered, BASFrequency: s.BASFrequency,
 		BankBSB: s.BankBSB, BankAccount: s.BankAccount, PayID: s.PayID,
 		InvoiceLeadDays: s.InvoiceLeadDays, AutoSendRent: s.AutoSendRent, EmergencyPhone: s.EmergencyPhone,
+		Address: s.Address, Phone: s.Phone, Email: s.Email, QuoteTerms: s.QuoteTerms,
+		Licences: s.Licences, HasLogo: s.LogoFileID != nil,
 	}
 }
 
@@ -52,6 +63,8 @@ func settingsFromRequest(body settingsRequest) core.OrgSettings {
 		Name: body.Name, ABN: body.ABN, GSTRegistered: body.GSTRegistered, BASFrequency: body.BASFrequency,
 		BankBSB: body.BankBSB, BankAccount: body.BankAccount, PayID: body.PayID,
 		InvoiceLeadDays: body.InvoiceLeadDays, AutoSendRent: body.AutoSendRent, EmergencyPhone: body.EmergencyPhone,
+		Address: body.Address, Phone: body.Phone, Email: body.Email, QuoteTerms: body.QuoteTerms,
+		Licences: body.Licences,
 	}
 }
 

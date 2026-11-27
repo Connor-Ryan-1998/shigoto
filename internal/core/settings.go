@@ -2,11 +2,13 @@ package core
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/mail"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -26,6 +28,36 @@ type OrgSettings struct {
 	AutoSendRent    bool
 	// EmergencyPhone is shown to tenants who mark a repair as urgent.
 	EmergencyPhone string
+
+	// Business profile, printed on quotes.
+	Address    string
+	Phone      string
+	Email      string
+	QuoteTerms string
+	Licences   []Licence
+	// LogoFileID is set only through SetOrgLogo; UpdateSettings ignores it.
+	LogoFileID *int64
+}
+
+// Licence is one trade or business licence, e.g. {QBCC, 1234567}. Type is
+// free-form so any industry fits.
+type Licence struct {
+	Type   string `json:"type"`
+	Number string `json:"number"`
+}
+
+// Profile limits.
+const (
+	maxLicences     = 5
+	maxLicenceField = 60
+	maxAddress      = 300
+	maxQuoteTerms   = 4000
+)
+
+// LogoPolicy is for the org logo: PNG or JPEG up to 2 MiB.
+var LogoPolicy = UploadPolicy{
+	MaxBytes: 2 << 20,
+	Allowed:  map[string]bool{"image/png": true, "image/jpeg": true},
 }
 
 var (
@@ -132,6 +164,12 @@ func validateSettings(in OrgSettings) (OrgSettings, error) {
 		}
 	}
 
+	profile, err := validateProfile(in)
+	if err != nil {
+		return OrgSettings{}, err
+	}
+	in = profile
+
 	if in.InvoiceLeadDays < 0 || in.InvoiceLeadDays > 14 {
 		return OrgSettings{}, fmt.Errorf("%w: invalid invoice_lead_days", ErrInvalidInput)
 	}
@@ -144,13 +182,23 @@ func validateSettings(in OrgSettings) (OrgSettings, error) {
 
 const settingsColumns = `name, coalesce(abn,''), gst_registered, coalesce(bas_frequency,''),
 	coalesce(bank_bsb,''), coalesce(bank_account,''), coalesce(payid,''),
-	invoice_lead_days, auto_send_rent, emergency_phone`
+	invoice_lead_days, auto_send_rent, emergency_phone,
+	address, phone, email, quote_terms, licences, logo_file_id`
 
 func scanSettings(row pgx.Row) (OrgSettings, error) {
 	var s OrgSettings
+	var licences []byte
 	err := row.Scan(&s.Name, &s.ABN, &s.GSTRegistered, &s.BASFrequency,
-		&s.BankBSB, &s.BankAccount, &s.PayID, &s.InvoiceLeadDays, &s.AutoSendRent, &s.EmergencyPhone)
-	return s, err
+		&s.BankBSB, &s.BankAccount, &s.PayID, &s.InvoiceLeadDays, &s.AutoSendRent, &s.EmergencyPhone,
+		&s.Address, &s.Phone, &s.Email, &s.QuoteTerms, &licences, &s.LogoFileID)
+	if err != nil {
+		return s, err
+	}
+	s.Licences = []Licence{}
+	if err := json.Unmarshal(licences, &s.Licences); err != nil {
+		return s, fmt.Errorf("decoding licences: %w", err)
+	}
+	return s, nil
 }
 
 // GetSettings looks up orgID's settings. It returns ErrNotFound if no such
@@ -174,6 +222,10 @@ func UpdateSettings(ctx context.Context, q Querier, orgID int64, in OrgSettings)
 	if err != nil {
 		return OrgSettings{}, err
 	}
+	licences, err := json.Marshal(validated.Licences)
+	if err != nil {
+		return OrgSettings{}, err
+	}
 
 	row := q.QueryRow(ctx, `
 		UPDATE orgs SET
@@ -186,16 +238,77 @@ func UpdateSettings(ctx context.Context, q Querier, orgID int64, in OrgSettings)
 			payid = NULLIF($7, ''),
 			invoice_lead_days = $8,
 			auto_send_rent = $9,
-			emergency_phone = $11
+			emergency_phone = $11,
+			address = $12,
+			phone = $13,
+			email = $14,
+			quote_terms = $15,
+			licences = $16
 		WHERE id = $10
 		RETURNING `+settingsColumns,
 		validated.Name, validated.ABN, validated.GSTRegistered, validated.BASFrequency,
 		validated.BankBSB, validated.BankAccount, validated.PayID,
 		validated.InvoiceLeadDays, validated.AutoSendRent, orgID, validated.EmergencyPhone,
+		validated.Address, validated.Phone, validated.Email, validated.QuoteTerms, licences,
 	)
 	out, err := scanSettings(row)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return OrgSettings{}, ErrNotFound
 	}
 	return out, err
+}
+
+// validateProfile checks and trims the business profile fields.
+func validateProfile(in OrgSettings) (OrgSettings, error) {
+	in.Address = strings.TrimSpace(in.Address)
+	in.Phone = strings.TrimSpace(in.Phone)
+	in.Email = strings.TrimSpace(in.Email)
+	if utf8.RuneCountInString(in.Address) > maxAddress {
+		return OrgSettings{}, fmt.Errorf("%w: address must be at most %d characters", ErrInvalidInput, maxAddress)
+	}
+	if in.Phone != "" && !phonePattern.MatchString(in.Phone) {
+		return OrgSettings{}, fmt.Errorf("%w: invalid phone", ErrInvalidInput)
+	}
+	if in.Email != "" {
+		addr, err := mail.ParseAddress(in.Email)
+		if err != nil || addr.Address != in.Email {
+			return OrgSettings{}, fmt.Errorf("%w: invalid email", ErrInvalidInput)
+		}
+	}
+	if utf8.RuneCountInString(in.QuoteTerms) > maxQuoteTerms {
+		return OrgSettings{}, fmt.Errorf("%w: quote_terms must be at most %d characters", ErrInvalidInput, maxQuoteTerms)
+	}
+	if len(in.Licences) > maxLicences {
+		return OrgSettings{}, fmt.Errorf("%w: licences: at most %d", ErrInvalidInput, maxLicences)
+	}
+	licences := make([]Licence, len(in.Licences))
+	for i, l := range in.Licences {
+		l.Type, l.Number = strings.TrimSpace(l.Type), strings.TrimSpace(l.Number)
+		if l.Type == "" || l.Number == "" {
+			return OrgSettings{}, fmt.Errorf("%w: licences: type and number are required", ErrInvalidInput)
+		}
+		if utf8.RuneCountInString(l.Type) > maxLicenceField || utf8.RuneCountInString(l.Number) > maxLicenceField {
+			return OrgSettings{}, fmt.Errorf("%w: licences: type and number must be at most %d characters", ErrInvalidInput, maxLicenceField)
+		}
+		licences[i] = l
+	}
+	in.Licences = licences
+	return in, nil
+}
+
+// SetOrgLogo points orgID's logo at fileID (nil clears it) and returns the
+// previous logo file, which the caller should delete if unreferenced.
+func SetOrgLogo(ctx context.Context, q Querier, orgID int64, fileID *int64) (*int64, error) {
+	var old *int64
+	err := q.QueryRow(ctx, `SELECT logo_file_id FROM orgs WHERE id = $1 FOR UPDATE`, orgID).Scan(&old)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	if _, err := q.Exec(ctx, `UPDATE orgs SET logo_file_id = $2 WHERE id = $1`, orgID, fileID); err != nil {
+		return nil, err
+	}
+	return old, nil
 }

@@ -11,7 +11,8 @@ import Page from './+page.svelte';
 const settings = {
 	name: 'Acme', abn: '', gst_registered: false, bas_frequency: '',
 	bank_bsb: '001002', bank_account: '00123456', payid: 'owner@example.com',
-	invoice_lead_days: 0, auto_send_rent: true, emergency_phone: '0400 123 456'
+	invoice_lead_days: 0, auto_send_rent: true, emergency_phone: '0400 123 456',
+	address: '', phone: '', email: '', quote_terms: '', licences: [] as { type: string; number: string }[], has_logo: false
 };
 
 beforeEach(() => {
@@ -82,7 +83,8 @@ describe('organisation settings', () => {
 		expect(apiMock).toHaveBeenCalledWith('PUT', '/api/v1/orgs/acme/settings', {
 			name: 'New name', abn: '', gst_registered: false, bas_frequency: '',
 			bank_bsb: '001002', bank_account: '00123456', payid: 'owner@example.com',
-			invoice_lead_days: 0, auto_send_rent: true, emergency_phone: '0400 123 456'
+			invoice_lead_days: 0, auto_send_rent: true, emergency_phone: '0400 123 456',
+			address: '', phone: '', email: '', quote_terms: '', licences: []
 		});
 	});
 
@@ -174,5 +176,56 @@ describe('organisation settings', () => {
 		render(Page);
 		expect(await screen.findByRole('alert')).toBeTruthy();
 		expect(apiMock).not.toHaveBeenCalled();
+	});
+
+	it('edits the business profile and licences', async () => {
+		render(Page);
+		await loaded();
+		await fireEvent.input(screen.getByLabelText('Business address'), { target: { value: '1 Main St' } });
+		await fireEvent.input(screen.getByLabelText('Business email'), { target: { value: 'hi@acme.test' } });
+		await fireEvent.input(screen.getByLabelText('Default quote terms'), { target: { value: '50% deposit' } });
+		await fireEvent.click(screen.getByRole('button', { name: 'Add licence' }));
+		await fireEvent.input(screen.getByLabelText('Licence 1 type'), { target: { value: 'QBCC' } });
+		await fireEvent.input(screen.getByLabelText('Licence 1 number'), { target: { value: '1234567' } });
+		await fireEvent.click(screen.getByRole('button', { name: 'Save settings' }));
+		await vi.waitFor(() => expect(apiMock.mock.calls.some(([m]) => m === 'PUT')).toBe(true));
+		const put = apiMock.mock.calls.find(([m]) => m === 'PUT')!;
+		expect(put[2]).toMatchObject({
+			address: '1 Main St', email: 'hi@acme.test', quote_terms: '50% deposit',
+			licences: [{ type: 'QBCC', number: '1234567' }]
+		});
+	});
+
+	it('removes a licence row', async () => {
+		apiMock.mockImplementation((method: string, _path: string, body: unknown) =>
+			Promise.resolve(method === 'GET' ? { ...settings, licences: [{ type: 'QBCC', number: '1' }, { type: 'Gas', number: '2' }] } : body));
+		render(Page);
+		await loaded();
+		await fireEvent.click(screen.getByRole('button', { name: 'Remove licence 1' }));
+		expect((screen.getByLabelText('Licence 1 type') as HTMLInputElement).value).toBe('Gas');
+		expect(screen.queryByLabelText('Licence 2 type')).toBeNull();
+	});
+
+	it('hides Add licence at five licences', async () => {
+		const five = [1, 2, 3, 4, 5].map((n) => ({ type: `T${n}`, number: `${n}` }));
+		apiMock.mockImplementation((method: string) => Promise.resolve(method === 'GET' ? { ...settings, licences: five } : {}));
+		render(Page);
+		await loaded();
+		expect(screen.queryByRole('button', { name: 'Add licence' })).toBeNull();
+	});
+
+	it('uploads and removes the logo', async () => {
+		apiMock.mockImplementation((method: string, path: string, body: unknown) => {
+			if (path.endsWith('/settings/logo')) return Promise.resolve(method === 'POST' ? { ...settings, has_logo: true } : undefined);
+			return Promise.resolve(method === 'GET' ? { ...settings } : body);
+		});
+		render(Page);
+		await loaded();
+		const file = new File(['x'], 'logo.png', { type: 'image/png' });
+		await fireEvent.change(screen.getByLabelText('Logo'), { target: { files: [file] } });
+		await vi.waitFor(() => expect(apiMock).toHaveBeenCalledWith('POST', '/api/v1/orgs/acme/settings/logo', expect.any(FormData)));
+		await fireEvent.click(await screen.findByRole('button', { name: 'Remove logo' }));
+		await vi.waitFor(() => expect(apiMock).toHaveBeenCalledWith('DELETE', '/api/v1/orgs/acme/settings/logo'));
+		expect(await screen.findByLabelText('Logo')).toBeTruthy();
 	});
 });

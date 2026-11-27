@@ -20,7 +20,25 @@
 		invoice_lead_days: number;
 		auto_send_rent: boolean;
 		emergency_phone: string;
+		address: string;
+		phone: string;
+		email: string;
+		quote_terms: string;
+		licences: { type: string; number: string }[];
+		has_logo: boolean;
 	};
+
+	const MAX_LICENCES = 5;
+
+	// withProfileDefaults fills profile fields a response may lack, so the
+	// form always has a licence list to edit.
+	function withProfileDefaults(s: Partial<Settings> & Omit<Settings, 'address' | 'phone' | 'email' | 'quote_terms' | 'licences' | 'has_logo'>): Settings {
+		return {
+			...s,
+			address: s.address ?? '', phone: s.phone ?? '', email: s.email ?? '', quote_terms: s.quote_terms ?? '',
+			licences: s.licences ?? [], has_logo: s.has_logo ?? false
+		};
+	}
 
 	const org = $derived(page.params.org);
 	const canManage = $derived(
@@ -51,7 +69,7 @@
 		saving = false;
 		loading = true;
 		try {
-			const result = await api<Settings>('GET', `/api/v1/orgs/${slug}/settings`);
+			const result = withProfileDefaults(await api<Settings>('GET', `/api/v1/orgs/${slug}/settings`));
 			if (seq !== requestSeq || slug !== org || !canManage) return;
 			settings = result;
 			snapshot = JSON.stringify(result);
@@ -79,7 +97,9 @@
 		success = '';
 		try {
 			// PUT replaces the whole record, including empty optional values.
-			const result = await api<Settings>('PUT', `/api/v1/orgs/${slug}/settings`, { ...settings });
+			// has_logo is response-only: the logo has its own routes.
+			const { has_logo: _hasLogo, ...body } = settings;
+			const result = withProfileDefaults(await api<Settings>('PUT', `/api/v1/orgs/${slug}/settings`, body));
 			if (seq !== requestSeq || slug !== org || !canManage) return;
 			settings = result;
 			snapshot = JSON.stringify(result);
@@ -92,6 +112,58 @@
 			error = e instanceof ApiError ? e.message : 'Could not save settings.';
 		} finally {
 			if (seq === requestSeq) saving = false;
+		}
+	}
+
+	// The logo saves immediately through its own route, so it never makes
+	// the form dirty: only has_logo changes, in both settings and snapshot.
+	let logoBusy = $state(false);
+	function setHasLogo(value: boolean) {
+		if (!settings) return;
+		settings.has_logo = value;
+		const saved = JSON.parse(snapshot) as Settings;
+		saved.has_logo = value;
+		snapshot = JSON.stringify(saved);
+	}
+	async function uploadLogo(e: Event) {
+		const input = e.currentTarget as HTMLInputElement;
+		const file = input.files?.[0];
+		if (!file || !canManage || logoBusy) return;
+		const slug = org;
+		const seq = requestSeq;
+		logoBusy = true;
+		error = ''; success = '';
+		try {
+			const form = new FormData();
+			form.append('file', file);
+			await api<Settings>('POST', `/api/v1/orgs/${slug}/settings/logo`, form);
+			if (seq !== requestSeq || slug !== org) return;
+			setHasLogo(true);
+			success = 'Logo saved.';
+		} catch (err) {
+			if (seq !== requestSeq || slug !== org) return;
+			error = err instanceof ApiError ? err.message : 'Could not upload the logo.';
+		} finally {
+			if (seq === requestSeq) logoBusy = false;
+			input.value = '';
+		}
+	}
+	async function removeLogo() {
+		if (!canManage || logoBusy || !confirm('Remove the logo?')) return;
+		const slug = org;
+		const seq = requestSeq;
+		logoBusy = true;
+		error = ''; success = '';
+		try {
+			await api('DELETE', `/api/v1/orgs/${slug}/settings/logo`);
+			if (seq !== requestSeq || slug !== org) return;
+			setHasLogo(false);
+			success = 'Logo removed.';
+		} catch (err) {
+			if (seq !== requestSeq || slug !== org) return;
+			error = err instanceof ApiError ? err.message : 'Could not remove the logo.';
+		} finally {
+			if (seq === requestSeq) logoBusy = false;
 		}
 	}
 </script>
@@ -123,6 +195,51 @@
 						{ value: 'monthly', label: 'Monthly' }
 					]} />
 				</Field>
+			</fieldset>
+			<fieldset disabled={saving} class="fieldset grid gap-3 rounded-box border border-base-300 bg-base-100 p-4">
+				<legend class="fieldset-legend">Business profile</legend>
+				<p class="text-base-content/70">Printed on quotes.</p>
+				<Field label="Business address" id="settings-address">
+					<textarea class="textarea w-full" id="settings-address" rows="3" bind:value={settings.address}></textarea>
+				</Field>
+				<div class="grid gap-3 sm:grid-cols-2">
+					<Field label="Business phone" id="settings-phone">
+						<input class="input w-full" id="settings-phone" type="tel" autocomplete="tel" bind:value={settings.phone} />
+					</Field>
+					<Field label="Business email" id="settings-email">
+						<input class="input w-full" id="settings-email" type="email" autocomplete="email" bind:value={settings.email} />
+					</Field>
+				</div>
+				<div class="grid gap-2">
+					<span class="font-medium">Licences</span>
+					{#each settings.licences as licence, i (i)}
+						<div class="grid grid-cols-[1fr_1fr_auto] items-end gap-2">
+							<Field label={`Licence ${i + 1} type`} id={`settings-licence-${i}-type`}>
+								<input class="input w-full" id={`settings-licence-${i}-type`} placeholder="e.g. QBCC" bind:value={licence.type} required />
+							</Field>
+							<Field label={`Licence ${i + 1} number`} id={`settings-licence-${i}-number`}>
+								<input class="input w-full" id={`settings-licence-${i}-number`} bind:value={licence.number} required />
+							</Field>
+							<button type="button" class="btn btn-outline" aria-label={`Remove licence ${i + 1}`} onclick={() => settings && settings.licences.splice(i, 1)}>Remove</button>
+						</div>
+					{/each}
+					{#if settings.licences.length < MAX_LICENCES}
+						<div><Button variant="secondary" onclick={() => settings && settings.licences.push({ type: '', number: '' })}>Add licence</Button></div>
+					{/if}
+				</div>
+				<Field label="Default quote terms" id="settings-quote-terms" hint="Pre-filled on new quotes.">
+					<textarea class="textarea w-full" id="settings-quote-terms" rows="4" bind:value={settings.quote_terms}></textarea>
+				</Field>
+				{#if settings.has_logo}
+					<div class="flex items-center gap-3">
+						<img src={`/api/v1/orgs/${org}/settings/logo`} alt="Current logo" class="h-12 w-auto" />
+						<Button variant="secondary" onclick={removeLogo} busy={logoBusy}>Remove logo</Button>
+					</div>
+				{:else}
+					<Field label="Logo" id="settings-logo" hint="PNG or JPEG, up to 2 MB.">
+						<input class="file-input w-full" id="settings-logo" type="file" accept="image/png,image/jpeg" disabled={logoBusy} onchange={uploadLogo} />
+					</Field>
+				{/if}
 			</fieldset>
 			<fieldset disabled={saving} class="fieldset grid gap-3 rounded-box border border-base-300 bg-base-100 p-4">
 				<legend class="fieldset-legend">Payment instructions</legend>
