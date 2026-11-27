@@ -150,3 +150,49 @@ func TestSendRevisionAfterAcceptRefused(t *testing.T) {
 		t.Fatalf("R1 status = %q, want still accepted", r1.Status)
 	}
 }
+
+// TestSendRevisionDuringAcceptRefused: while rev 1 is being accepted (its
+// transaction still open), sending rev 2 must wait and then be refused,
+// not leave two live revisions.
+func TestSendRevisionDuringAcceptRefused(t *testing.T) {
+	e := testkit.New(t)
+	store := storage.NewDisk(t.TempDir())
+	org := e.Org("acme")
+	user := e.User("owner@example.com")
+	q, err := quotes.CreateDraft(e.Ctx, e.Pool, org.ID, draft(e.Contact(org).ID,
+		quotes.NewLine{Kind: quotes.KindMaterial, Description: "Cable", QuantityMilli: 1000, UnitAmount: 100, GSTCode: "FRE"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := markSent(t, e, store, org.ID, q.ID); err != nil {
+		t.Fatal(err)
+	}
+	r2, err := quotes.Revise(e.Ctx, e.Pool, org.ID, q.ID, issued)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	acceptTx, err := e.Pool.Begin(e.Ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = acceptTx.Rollback(e.Ctx) }()
+	if _, _, err := quotes.Accept(e.Ctx, acceptTx, org.ID, user.ID, q.ID, sentAt); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := markSent(t, e, store, org.ID, r2.ID)
+		done <- err
+	}()
+	time.Sleep(300 * time.Millisecond)
+	if err := acceptTx.Commit(e.Ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; !errors.Is(err, core.ErrInvalidState) || err.Error() != "another revision of this quote was accepted" {
+		t.Fatalf("send R2 during accept err = %v, want another revision of this quote was accepted", err)
+	}
+	if got, _ := quotes.GetQuote(e.Ctx, e.Pool, org.ID, r2.ID); got.Status != quotes.StatusDraft {
+		t.Fatalf("R2 status = %q, want still draft", got.Status)
+	}
+}

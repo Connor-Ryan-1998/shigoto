@@ -83,7 +83,7 @@ func PDF(ctx context.Context, q core.Querier, store storage.Store, orgID int64, 
 // and supersedes the revision it was made from. Sending is refused once
 // another revision of the same quote has been accepted.
 func MarkSent(ctx context.Context, tx pgx.Tx, store storage.Store, orgID, id int64, now time.Time) (Quote, error) {
-	current, err := lockQuote(ctx, tx, orgID, id)
+	current, err := lockRevisions(ctx, tx, orgID, id)
 	if err != nil {
 		return Quote{}, err
 	}

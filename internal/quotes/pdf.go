@@ -249,8 +249,11 @@ func (r *quotePDF) render(m pdfModel, logo []byte) {
 	r.fit(margin, pageW-2*margin, m.Heading, false)
 	r.nl(20)
 	r.font("go", 11)
-	r.fit(margin, pageW-2*margin, m.Title, false)
-	r.nl(22)
+	for _, l := range r.wrap(m.Title, pageW-2*margin) {
+		r.text(margin, l)
+		r.nl(14)
+	}
+	r.nl(8)
 
 	// Customer on the left, dates on the right.
 	y := r.pdf.GetY()
@@ -279,15 +282,24 @@ func (r *quotePDF) render(m pdfModel, logo []byte) {
 		r.tableHeader(s.Header)
 		r.font("go", 9)
 		for _, row := range s.Rows {
-			if r.pdf.GetY()+rowH > bottomY {
+			// The description wraps (the sent PDF can't be corrected, so
+			// nothing is cut off); the other cells sit on its first line.
+			desc := r.wrap(row[0], tableX[0].w)
+			height := float64(len(desc)) * rowH
+			if r.pdf.GetY()+height > bottomY {
 				r.newPage()
 				r.tableHeader(s.Header)
 				r.font("go", 9)
 			}
-			for i, c := range tableX {
-				r.fit(c.x, c.w, row[i], c.right)
+			top := r.pdf.GetY()
+			for i, c := range tableX[1:] {
+				r.fit(c.x, c.w, row[i+1], c.right)
 			}
-			r.nl(rowH)
+			for _, l := range desc {
+				r.fit(tableX[0].x, tableX[0].w, l, false)
+				r.nl(rowH)
+			}
+			r.pdf.SetY(top + height)
 		}
 		r.nl(10)
 	}

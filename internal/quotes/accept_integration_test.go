@@ -167,18 +167,30 @@ func TestAcceptNameClashes(t *testing.T) {
 		t.Fatalf("tasks = %v, want Rough-in and Rough-in (Q-0002)", tasks)
 	}
 
-	// Both the name and its suffixed form taken: refused, nothing written.
+	// Both the name and its suffixed form taken: numbered after the suffix.
 	e.Project(org, client, testkit.ProjectName("Switchboard upgrade (Q-0003)"))
 	q3 := sentQuote(t, e, org.ID, draft(client, labour("Rough-in", 1000, 9500)))
-	before := e.Count("projects", "org_id = $1", org.ID)
-	if _, _, err := accept(t, e, org.ID, user.ID, q3.ID); !errors.Is(err, core.ErrInvalidInput) {
-		t.Fatalf("double clash err = %v, want ErrInvalidInput", err)
+	if _, p3, err := accept(t, e, org.ID, user.ID, q3.ID); err != nil || p3.Name != "Switchboard upgrade (Q-0003) 2" {
+		t.Fatalf("double clash project = %q, %v", p3.Name, err)
 	}
-	if n := e.Count("projects", "org_id = $1", org.ID); n != before {
-		t.Fatalf("projects %d -> %d after failed accept", before, n)
+}
+
+func TestAcceptRepeatedLabourDescriptions(t *testing.T) {
+	e := testkit.New(t)
+	org := e.Org("acme")
+	e.Settings(org, testkit.GSTRegistered(true))
+	user := e.User("owner@example.com")
+	q := sentQuote(t, e, org.ID, draft(e.Contact(org).ID,
+		labour("Labour", 8000, 9500), labour("Labour", 8000, 9500), labour("Labour", 4000, 9500), labour("Labour", 1000, 9500)))
+	_, p, err := accept(t, e, org.ID, user.ID, q.ID)
+	if err != nil {
+		t.Fatalf("Accept: %v", err)
 	}
-	if got, _ := quotes.GetQuote(e.Ctx, e.Pool, org.ID, q3.ID); got.Status != quotes.StatusSent {
-		t.Fatalf("q3 status = %q, want still sent", got.Status)
+	tasks := taskNames(t, e, org.ID, p.ID)
+	for _, name := range []string{"Labour", "Labour (Q-0001)", "Labour (Q-0001) 2", "Labour (Q-0001) 3"} {
+		if _, ok := tasks[name]; !ok {
+			t.Errorf("missing task %q in %v", name, tasks)
+		}
 	}
 }
 

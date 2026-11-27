@@ -95,10 +95,21 @@ func Accept(ctx context.Context, tx pgx.Tx, orgID, userID, id int64, now time.Ti
 	return accepted, project, err
 }
 
-// freeName returns base, or base+suffix when existsSQL ($1 = scope, $2 =
-// name) says base is taken. If both are taken it returns ErrInvalidInput.
+// maxNameTries bounds freeName's search for an unused name.
+const maxNameTries = 100
+
+// freeName returns base if unused, else base+suffix, else base+suffix+" 2",
+// " 3" and so on (existsSQL: $1 = scope, $2 = name), so repeated or
+// clashing names never stop a quote being accepted.
 func freeName(ctx context.Context, tx pgx.Tx, base, suffix, existsSQL string, scope int64) (string, error) {
-	for _, name := range []string{base, base + suffix} {
+	for i := 0; i < maxNameTries; i++ {
+		name := base
+		switch {
+		case i == 1:
+			name = base + suffix
+		case i > 1:
+			name = fmt.Sprintf("%s%s %d", base, suffix, i)
+		}
 		var exists bool
 		if err := tx.QueryRow(ctx, existsSQL, scope, name).Scan(&exists); err != nil {
 			return "", err
@@ -107,5 +118,5 @@ func freeName(ctx context.Context, tx pgx.Tx, base, suffix, existsSQL string, sc
 			return name, nil
 		}
 	}
-	return "", fmt.Errorf("%w: the name %q is already in use", core.ErrInvalidInput, base+suffix)
+	return "", fmt.Errorf("%w: no free name for %q", core.ErrInvalidInput, base)
 }

@@ -242,6 +242,25 @@ func quoteLines(ctx context.Context, q core.Querier, orgID, quoteID int64) ([]Li
 	return lines, rows.Err()
 }
 
+// lockRevisions locks every revision sharing quote id's number (in id
+// order, so concurrent callers can't deadlock) and returns quote id. Send
+// and revise take it before checking for an accepted sibling, so an
+// accept in flight on another revision is seen once it commits.
+func lockRevisions(ctx context.Context, q core.Querier, orgID, id int64) (Quote, error) {
+	var number int
+	err := q.QueryRow(ctx, `SELECT number FROM quotes WHERE org_id = $1 AND id = $2`, orgID, id).Scan(&number)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Quote{}, core.ErrNotFound
+	}
+	if err != nil {
+		return Quote{}, err
+	}
+	if _, err := q.Exec(ctx, `SELECT id FROM quotes WHERE org_id = $1 AND number = $2 ORDER BY id FOR UPDATE`, orgID, number); err != nil {
+		return Quote{}, err
+	}
+	return lockQuote(ctx, q, orgID, id)
+}
+
 // lockQuote locks and returns quote id in orgID (without lines).
 func lockQuote(ctx context.Context, q core.Querier, orgID, id int64) (Quote, error) {
 	return scanQuote(q.QueryRow(ctx, `SELECT `+quoteColumns+` FROM quotes WHERE org_id = $1 AND id = $2 FOR UPDATE`, orgID, id))
@@ -331,7 +350,7 @@ func Decline(ctx context.Context, q core.Querier, orgID, userID, id int64, now t
 // number of days as the original. The original is superseded only when the
 // revision is sent.
 func Revise(ctx context.Context, q core.Querier, orgID, id int64, today time.Time) (Quote, error) {
-	current, err := lockQuote(ctx, q, orgID, id)
+	current, err := lockRevisions(ctx, q, orgID, id)
 	if err != nil {
 		return Quote{}, err
 	}

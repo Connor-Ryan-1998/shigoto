@@ -92,3 +92,25 @@ func TestQuotePDFLongAndLogo(t *testing.T) {
 		t.Fatalf("pages = %d, %v; want at least 2", pages, err)
 	}
 }
+
+// TestQuotePDFWrapsLongDescriptions: the sent PDF is immutable, so a long
+// line description must wrap onto more lines rather than be cut off.
+// Wrapped, 25 descriptions of ~400 characters can't fit on one page.
+func TestQuotePDFWrapsLongDescriptions(t *testing.T) {
+	in := samplePDFInput()
+	in.Quote.Lines = nil
+	for i := range 25 {
+		in.Quote.Lines = append(in.Quote.Lines, Line{Kind: KindLabour,
+			Description: fmt.Sprintf("Item %d: supply and install %s", i, strings.Repeat("including removal of the existing fittings ", 9)),
+			QuantityMilli: 1000, UnitAmount: 100, GSTCode: core.FRE, Amount: 100})
+	}
+	in.Quote.Title = strings.Repeat("Very long quote title ", 9)
+	var buf bytes.Buffer
+	if err := WriteQuotePDF(&buf, in); err != nil {
+		t.Fatal(err)
+	}
+	pages, err := property.PDFPageCount(buf.Bytes())
+	if err != nil || pages < 3 {
+		t.Fatalf("pages = %d, %v; want at least 3 when descriptions wrap", pages, err)
+	}
+}
