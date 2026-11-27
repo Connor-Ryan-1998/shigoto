@@ -1,0 +1,21 @@
+id: quote-new
+component: QuoteNewPage
+page: {org: acme}
+session: {perms: [quotes_read, quotes_write, invoices_read, timesheets_read]}
+modules: [timesheets, quotes]
+api:
+  GET /api/v1/orgs/acme/contacts?kind=client: [{id: 9, name: Priya, kind: client}]
+  GET /api/v1/orgs/acme/projects: []
+  GET /api/v1/orgs/acme/settings: {gst_registered: true, quote_terms: "50% deposit"}
+ready: New quote
+fill: {Title: Switchboard upgrade, Description: Rough-in, Hours: "2.5", Rate ($/h): "95"}
+submit: Save draft
+request: POST /api/v1/orgs/acme/quotes
+contract:
+  blocks_duplicate_submit: true
+  preserves_input_on: 422
+  busy_dismiss_blocked: Cancel
+  dirty_navigation_blocked: true
+skip:
+  cancel: page editor; Cancel leaves the page instead of closing an editor
+  dirty_dismiss_confirms: page editor, no dialog to dismiss; leaving is covered by dirty_navigation_blocked

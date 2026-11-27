@@ -1,0 +1,26 @@
+id: quote-edit
+component: QuoteEditPage
+page: {org: acme, id: "7"}
+session: {perms: [quotes_read, quotes_write, invoices_read, timesheets_read]}
+modules: [timesheets, quotes]
+api:
+  GET /api/v1/orgs/acme/contacts?kind=client: [{id: 9, name: Priya, kind: client}]
+  GET /api/v1/orgs/acme/projects: []
+  GET /api/v1/orgs/acme/settings: {gst_registered: true, quote_terms: ""}
+  GET /api/v1/orgs/acme/quotes/7:
+    {id: 7, contact_id: 9, project_id: null, number_label: Q-0007, title: Old, terms: "", status: draft, display_status: draft,
+     issue_date: "2026-11-27", valid_until: "2026-12-27",
+     lines: [{id: 1, kind: labour, description: Rough-in, quantity_milli: 1000, unit_amount: 9500, gst_code: GST, gst_amount: 950, amount: 9500}],
+     attachments: [], revisions: []}
+ready: Edit Q-0007
+fill: {Title: New title}
+submit: Save draft
+request: PUT /api/v1/orgs/acme/quotes/7
+contract:
+  blocks_duplicate_submit: true
+  preserves_input_on: 422
+  busy_dismiss_blocked: Cancel
+  dirty_navigation_blocked: true
+skip:
+  cancel: page editor; Cancel leaves the page instead of closing an editor
+  dirty_dismiss_confirms: page editor, no dialog to dismiss; leaving is covered by dirty_navigation_blocked

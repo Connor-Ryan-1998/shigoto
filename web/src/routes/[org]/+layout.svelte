@@ -8,13 +8,14 @@
 	import { property } from '../../lib/modules/property/manifest';
 	import { timesheets } from '../../lib/modules/timesheets/manifest';
 	import { reconciliation } from '../../lib/modules/reconciliation/manifest';
+	import { quotes } from '../../lib/modules/quotes/manifest';
 	import { api } from '../../lib/api';
 	import Drawer from '../../lib/components/Drawer.svelte';
 	import Icon from '../../lib/components/Icon.svelte';
 
 	let { children } = $props();
 
-	const manifests = [core, property, timesheets, reconciliation];
+	const manifests = [core, property, timesheets, quotes, reconciliation];
 
 	$effect(() => {
 		session.setOrg(page.params.org ?? '');

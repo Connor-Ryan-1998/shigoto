@@ -1,7 +1,7 @@
 import type { Component } from 'svelte';
 import type { IconName } from '../components/Icon.svelte';
 
-export type ModuleName = 'core' | 'property' | 'timesheets' | 'reconciliation';
+export type ModuleName = 'core' | 'property' | 'timesheets' | 'quotes' | 'reconciliation';
 
 // NavGroup is the sidebar section a link appears in. It is a display
 // grouping only: which module owns a link still decides whether it shows.
@@ -41,7 +41,7 @@ export type ModuleManifest = {
 // MODULE_ORDER orders links within a sidebar section: core first (it's
 // not a togglable SHIGOTO_MODULES entry, so it's never in enabledModules),
 // then the optional modules in a stable, product-chosen order.
-const MODULE_ORDER: ModuleName[] = ['core', 'property', 'timesheets', 'reconciliation'];
+const MODULE_ORDER: ModuleName[] = ['core', 'property', 'timesheets', 'quotes', 'reconciliation'];
 
 export type VisibleNavGroup = { id: NavGroup; label: string; items: NavItem[] };
 

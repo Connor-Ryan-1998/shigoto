@@ -4,12 +4,14 @@ import { core } from './core/manifest';
 import { property } from './property/manifest';
 import { reconciliation } from './reconciliation/manifest';
 import { timesheets } from './timesheets/manifest';
+import { quotes } from './quotes/manifest';
 
-const manifests = [core, property, timesheets, reconciliation];
-const ALL_MODULES = ['property', 'timesheets', 'reconciliation'];
+const manifests = [core, property, timesheets, quotes, reconciliation];
+const ALL_MODULES = ['property', 'timesheets', 'quotes', 'reconciliation'];
 const OWNER_PERMS = [
 	'org_admin', 'contacts_write', 'invoices_write', 'invoices_read', 'payments_write', 'reports_read',
-	'recon_write', 'property_write', 'property_read', 'timesheets_write', 'timesheets_read', 'timesheets_admin'
+	'recon_write', 'property_write', 'property_read', 'timesheets_write', 'timesheets_read', 'timesheets_admin',
+	'quotes_read', 'quotes_write'
 ];
 
 const hrefs = (groups: ReturnType<typeof visibleNav>, id: string) =>
@@ -20,7 +22,7 @@ describe('visibleNav', () => {
 		const groups = visibleNav(manifests, ALL_MODULES, OWNER_PERMS);
 		expect(groups.map((g) => g.label)).toEqual(['Overview', 'Property', 'Projects', 'Finance', 'Admin']);
 		expect(hrefs(groups, 'overview')).toEqual(['', 'contacts']);
-		expect(hrefs(groups, 'projects')).toEqual(['projects', 'time']);
+		expect(hrefs(groups, 'projects')).toEqual(['projects', 'time', 'quotes']);
 		expect(hrefs(groups, 'finance')).toEqual(['invoices', 'reports', 'reconciliation', 'expenses']);
 		expect(hrefs(groups, 'admin')).toEqual(['settings', 'settings/members']);
 	});
@@ -72,5 +74,11 @@ describe('visibleNav', () => {
 	it('hides a disabled module and a perm-less item', () => {
 		expect(hrefs(visibleNav(manifests, [], ['property_read']), 'property')).toBeUndefined();
 		expect(hrefs(visibleNav(manifests, ['property'], []), 'property')).toBeUndefined();
+	});
+
+	it('shows Quotes only with the quotes module and quotes_read', () => {
+		expect(hrefs(visibleNav(manifests, ['timesheets', 'quotes'], ['quotes_read']), 'projects')).toEqual(['quotes']);
+		expect(hrefs(visibleNav(manifests, ['timesheets'], ['quotes_read']), 'projects')).toBeUndefined();
+		expect(hrefs(visibleNav(manifests, ['timesheets', 'quotes'], ['timesheets_read']), 'projects')).toEqual(['projects', 'time']);
 	});
 });

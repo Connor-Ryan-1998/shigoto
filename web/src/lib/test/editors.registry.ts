@@ -6,6 +6,8 @@ import InvoiceNewPage from '../../routes/[org]/invoices/new/+page.svelte';
 import ContactDialog from '../modules/core/contacts/ContactDialog.svelte';
 import LogTimeDialog from '../modules/timesheets/LogTimeDialog.svelte';
 import SettingsPage from '../../routes/[org]/settings/+page.svelte';
+import QuoteNewPage from '../../routes/[org]/quotes/new/+page.svelte';
+import QuoteEditPage from '../../routes/[org]/quotes/[id]/edit/+page.svelte';
 import LeasePage from '../../routes/[org]/leases/[id]/+page.svelte';
 import LeaseNewPage from '../../routes/[org]/leases/new/+page.svelte';
 import ProjectDialog from '../modules/timesheets/ProjectDialog.svelte';
@@ -54,6 +56,8 @@ export const components = {
 	PortalRepairPage,
 	PropertyDetailsPage,
 	PropertyNotesPage,
+	QuoteEditPage,
+	QuoteNewPage,
 	SettingsPage,
 	StrataDocumentDialog,
 	StrataSchemeDialog,
