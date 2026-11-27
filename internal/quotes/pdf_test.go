@@ -101,7 +101,7 @@ func TestQuotePDFWrapsLongDescriptions(t *testing.T) {
 	in.Quote.Lines = nil
 	for i := range 25 {
 		in.Quote.Lines = append(in.Quote.Lines, Line{Kind: KindLabour,
-			Description: fmt.Sprintf("Item %d: supply and install %s", i, strings.Repeat("including removal of the existing fittings ", 9)),
+			Description:   fmt.Sprintf("Item %d: supply and install %s", i, strings.Repeat("including removal of the existing fittings ", 9)),
 			QuantityMilli: 1000, UnitAmount: 100, GSTCode: core.FRE, Amount: 100})
 	}
 	in.Quote.Title = strings.Repeat("Very long quote title ", 9)
