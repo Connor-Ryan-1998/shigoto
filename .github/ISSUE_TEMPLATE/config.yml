@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and self-hosting help
+    url: https://github.com/Connor-Ryan-1998/shigoto/discussions
+    about: Ask questions in Discussions, using fictional data and redacted logs.
+  - name: Security vulnerability
+    url: https://github.com/Connor-Ryan-1998/shigoto/security/advisories/new
+    about: Report vulnerabilities privately, never in a public issue.

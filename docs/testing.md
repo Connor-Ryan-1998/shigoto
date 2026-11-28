@@ -2,7 +2,7 @@
 
 Each behaviour is tested in exactly one layer. Repeated shapes are written
 as YAML cases run by one shared harness per layer. A new feature adds cases,
-not new test plumbing. Design: `docs/superpowers/specs/2026-11-13-test-harness-design.md`.
+not new test plumbing.
 
 ## Who owns what
 

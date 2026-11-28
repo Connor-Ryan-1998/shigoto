@@ -1,0 +1,6 @@
+# Local evaluation with the published app instead of a frontend/Go build.
+# Use together with ../docker-compose.yml; PostgreSQL is still built locally.
+services:
+  app:
+    build: !reset null
+    image: ghcr.io/connor-ryan-1998/shigoto:latest

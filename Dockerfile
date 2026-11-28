@@ -37,6 +37,7 @@ FROM scratch
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=build /shigoto /shigoto
 COPY --from=build /licenses /licenses
+COPY LICENSE /licenses/SHIGOTO-LICENSE
 COPY --from=build --chown=65532:65532 /data/files /data/files
 USER 65532:65532
 ENTRYPOINT ["/shigoto"]

@@ -1,6 +1,7 @@
 .git
 .github
 .superpowers
+.opencode
 bin
 data
 docs

@@ -1,0 +1,26 @@
+name: Bug report
+description: Report a reproducible problem using fictional data.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: "Security issue? Use [private vulnerability reporting](https://github.com/Connor-Ryan-1998/shigoto/security/advisories/new), not this form. Never include credentials, sandbox passwords or personal/financial records."
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: Include container tag or commit SHA.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Include expected and actual behaviour, using fictional data.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment and logs
+      description: OS, browser, deployment method and relevant redacted logs or screenshots.

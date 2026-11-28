@@ -4,6 +4,8 @@
 /docker-compose.override.yml
 /.local/
 .superpowers/
+/.opencode/
+/docs/superpowers/
 
 # internal/webui/dist is `task web:build`'s output. Only .gitkeep is
 # tracked, so a fresh checkout has an empty dist/ (go:embed still needs the

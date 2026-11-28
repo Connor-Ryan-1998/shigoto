@@ -8,7 +8,7 @@ The user owns rental properties and does consulting work. Until now a property m
 
 At tax time they need one place that shows all money coming in and going out, reconciled and split by property and by project, ready for an Australian BAS.
 
-This document is the brainstormed design. After approval it is copied to `apps/shigoto/docs/design.md` in the new repo, and `superpowers:writing-plans` produces the implementation plan.
+This document records the original design intent, not a complete description of the current implementation.
 
 ## Intent
 
@@ -218,7 +218,7 @@ apps/shigoto/                      (own local repo; submodule later)
 
 1. Run `git init` in `apps/shigoto` to make it a **local repo only**, with nothing pushed. Add `/apps/shigoto/` to the homelab `.gitignore` so the parent repo never picks it up as an embedded repo by accident. Later, once the user asks, create the GitHub repo, push, and turn it into a submodule like `keiryo`, removing the ignore line.
 2. Commit this design as `apps/shigoto/docs/design.md`, in the shigoto repo.
-3. Run `superpowers:writing-plans` to produce the implementation plan, then implement.
+3. Write an implementation plan, then implement.
 
 ## Verification (definition of done for v1)
 
