@@ -41,6 +41,8 @@ describe('strata documents card', () => {
 		expect(within(third).getByText('The model provider is unavailable (HTTP 503).')).toBeTruthy();
 		const link = within(first).getByRole('link', { name: 'AGM 2024' }) as HTMLAnchorElement;
 		expect(link.getAttribute('href')).toBe(`${list}/1/file`);
+		// Served inline: a full browser load, not a SvelteKit navigation.
+		expect(link.hasAttribute('data-sveltekit-reload')).toBe(true);
 	});
 
 	it('shows an empty state', async () => {

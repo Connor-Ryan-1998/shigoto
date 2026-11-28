@@ -35,6 +35,12 @@ describe('client project page', () => {
 		expect(within(toSign).getByRole('link', { name: 'Review and sign SOW' }).getAttribute('href')).toBe('/portal/acme/documents/2');
 		const signed = screen.getByRole('heading', { name: 'Signed' }).closest('section')!;
 		expect(within(signed).getByText('Applies to all projects')).toBeTruthy();
+		const pdfs = screen.getAllByRole('link', { name: /^Download / });
+		expect(pdfs.length).toBeGreaterThan(0);
+		for (const pdf of pdfs) {
+			expect(pdf.getAttribute('href')).toMatch(/^\/api\/v1\/portal\/acme\/documents\/\d+\/file$/);
+			expect(pdf.hasAttribute('download')).toBe(true);
+		}
 		const inactive = screen.getByText('Old NDA').closest('li')!;
 		expect(within(inactive).queryByRole('link', { name: /sign/i })).toBeNull();
 		expect(within(inactive).getByText('Withdrawn')).toBeTruthy();

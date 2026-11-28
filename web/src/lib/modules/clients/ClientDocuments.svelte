@@ -118,9 +118,9 @@
 							<td>{CATEGORY_LABELS[d.category]}</td>
 							<td><StatusBadge status={statusLabel(d)} tone={DOCUMENT_STATUS_TONES[d.status]} /></td>
 							<td class="whitespace-nowrap text-right">
-								<a class="btn btn-ghost btn-xs" href={`${base}/documents/${d.id}/file`} aria-label={`Download ${d.title}`}>PDF</a>
+								<a class="btn btn-ghost btn-xs" href={`${base}/documents/${d.id}/file`} download aria-label={`Download ${d.title}`}>PDF</a>
 								{#if d.signature}
-									<a class="btn btn-ghost btn-xs" href={`${base}/documents/${d.id}/certificate`} aria-label={`Certificate for ${d.title}`}>Certificate</a>
+									<a class="btn btn-ghost btn-xs" href={`${base}/documents/${d.id}/certificate`} download aria-label={`Certificate for ${d.title}`}>Certificate</a>
 								{/if}
 								{#if canWrite}
 									{#each documentActions(d) as action (action)}

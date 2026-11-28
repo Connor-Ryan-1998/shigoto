@@ -92,7 +92,7 @@
 	]);
 </script>
 
-{#snippet titleCell(d: StrataDocument)}<a class="link" href={`${base}/${d.id}/file`}>{d.title}</a>{/snippet}
+{#snippet titleCell(d: StrataDocument)}<a class="link" href={`${base}/${d.id}/file`} data-sveltekit-reload>{d.title}</a>{/snippet}
 {#snippet typeCell(d: StrataDocument)}{strataDocTypeLabel(d.doc_type)}{/snippet}
 {#snippet dateCell(d: StrataDocument)}<DateText iso={d.document_date} />{/snippet}
 {#snippet pagesCell(d: StrataDocument)}{d.page_count}{/snippet}

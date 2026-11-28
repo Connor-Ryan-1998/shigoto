@@ -56,7 +56,7 @@
 							<a class="btn btn-primary btn-sm" href={`/portal/${org}/documents/${d.id}`} aria-label={`Review and sign ${d.title}`}>Review &amp; sign</a>
 						{:else}
 							<a class="btn btn-ghost btn-sm" href={`/portal/${org}/documents/${d.id}`} aria-label={`View ${d.title}`}>View</a>
-							<a class="btn btn-ghost btn-sm" href={documentFileUrl(org, d.id)} aria-label={`Download ${d.title}`}>PDF</a>
+							<a class="btn btn-ghost btn-sm" href={documentFileUrl(org, d.id)} download aria-label={`Download ${d.title}`}>PDF</a>
 						{/if}
 					</span>
 				</div>

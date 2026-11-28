@@ -34,7 +34,13 @@ describe('sign document page', () => {
 		await fireEvent.click(sign);
 		expect(apiMock).toHaveBeenCalledWith('POST', `${url}/sign`, { typed_name: 'Priya Nair', consent: true });
 		expect(await screen.findByText(/Signed by Priya Nair/)).toBeTruthy();
-		expect(screen.getByRole('link', { name: 'Download signing certificate' }).getAttribute('href')).toBe(`${url}/certificate`);
+		const cert = screen.getByRole('link', { name: 'Download signing certificate' });
+		expect(cert.getAttribute('href')).toBe(`${url}/certificate`);
+		// Without `download` the SvelteKit router swallows the click.
+		expect(cert.hasAttribute('download')).toBe(true);
+		const pdf = screen.getByRole('link', { name: 'Download PDF' });
+		expect(pdf.getAttribute('href')).toBe(`${url}/file`);
+		expect(pdf.hasAttribute('download')).toBe(true);
 	});
 
 	it('keeps the typed name when the server rejects the signature', async () => {

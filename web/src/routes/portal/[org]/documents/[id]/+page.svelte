@@ -104,7 +104,7 @@
 					<div><button type="button" class="btn btn-secondary" onclick={openPdf}>Open {doc.title} (PDF)</button></div>
 					{#if opened}<p class="text-sm text-success">Opened. Come back here to sign.</p>{/if}
 				{:else}
-					<div><a class="btn btn-secondary" href={documentFileUrl(org, doc.id)}>Download PDF</a></div>
+					<div><a class="btn btn-secondary" href={documentFileUrl(org, doc.id)} download>Download PDF</a></div>
 				{/if}
 				{#if doc.status === 'withdrawn'}
 					<p class="alert alert-soft">This document was withdrawn and no longer needs your signature.</p>
@@ -119,7 +119,7 @@
 				<div class="card-body gap-2">
 					<h2 id="signed-heading" class="text-lg font-semibold text-success">Signed</h2>
 					<p>Signed by {doc.signature.typed_name} ({doc.signature.email}) on {new Date(doc.signature.signed_at).toLocaleString()}.</p>
-					<a class="link" href={certificateUrl(org, doc.id)}>Download signing certificate</a>
+					<a class="link" href={certificateUrl(org, doc.id)} download>Download signing certificate</a>
 				</div>
 			</section>
 		{:else if isToSign(doc)}

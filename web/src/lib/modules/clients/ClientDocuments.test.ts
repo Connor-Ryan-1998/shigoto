@@ -32,7 +32,12 @@ describe('ClientDocuments', () => {
 		const signed = screen.getByText('Signed MSA').closest('tr')!;
 		expect(within(signed).queryByRole('button', { name: /Withdraw|Replace|Delete|Send/ })).toBeNull();
 		expect(within(signed).getByText(/Priya Nair/)).toBeTruthy();
-		expect(within(signed).getByRole('link', { name: 'Certificate for Signed MSA' }).getAttribute('href')).toBe(`${base}/documents/3/certificate`);
+		const cert = within(signed).getByRole('link', { name: 'Certificate for Signed MSA' });
+		expect(cert.getAttribute('href')).toBe(`${base}/documents/3/certificate`);
+		expect(cert.hasAttribute('download')).toBe(true);
+		const pdf = within(signed).getByRole('link', { name: 'Download Signed MSA' });
+		expect(pdf.getAttribute('href')).toBe(`${base}/documents/3/file`);
+		expect(pdf.hasAttribute('download')).toBe(true);
 	});
 
 	it('explains a send refused for a client without a portal login', async () => {

@@ -114,6 +114,12 @@ test('owner sends a document and the client signs it in the portal', async ({ pa
 	await cp.getByLabel(/I agree this is my electronic signature and I am authorised to sign for Client One\./).check();
 	await cp.getByRole('button', { name: 'Sign document' }).click();
 	await expect(cp.getByText(/Signed by Priya Nair/)).toBeVisible();
+	// Clicking the links must download, not route inside the SPA.
+	for (const name of ['Download PDF', 'Download signing certificate']) {
+		const download = cp.waitForEvent('download');
+		await cp.getByRole('link', { name }).click();
+		expect((await download).suggestedFilename()).toMatch(/^Statement of Work.*\.pdf$/);
+	}
 	const cert = await cp.request.get(`${base}/api/v1/portal/org-a/documents/${signLink.split('/').pop()}/certificate`);
 	expect(cert.status()).toBe(200);
 	expect(cert.headers()['content-type']).toBe('application/pdf');
